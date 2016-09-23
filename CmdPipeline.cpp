@@ -128,6 +128,7 @@ namespace cmd {
 namespace label {
 	static const wchar_t* FASTBOOT_TOKEN = L"finished. total time";
 	static const wchar_t* FASTBOOT_PASS  = L"OKAY";
+	static const wchar_t* FASTBOOT_ERROR = L"error: cannot load";
 }
 
 
@@ -425,6 +426,11 @@ int CCmdPipeline::CommandRead(HANDLE removed, int timeout,
             nCharsRead += nWideChars;
             memset(szBuffer, 0, sizeof(szBuffer));
             nBytesRead = 0;
+		}
+
+		if (NULL != wcsstr(result, label::FASTBOOT_ERROR)) {
+			safe_sprintf(m_szErrors, label::FASTBOOT_ERROR);
+			goto _cleanup;
 		}
 
 		if (NULL != wcsstr(result, m_szTokens)) {

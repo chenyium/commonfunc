@@ -140,4 +140,7 @@ wchar_t* CalculateImeiDigitW(wchar_t* imei);
 }
 #endif
 
+void _cdecl OutputDebugFormat(const char *prefix, const char *format, ...);
+void _cdecl OutputDebugFormat(const wchar_t *prefix, const wchar_t *format, ...);
+
 #endif  _COMMON_FUNC_H_

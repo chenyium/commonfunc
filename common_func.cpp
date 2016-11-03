@@ -526,3 +526,33 @@ wchar_t* CalculateImeiDigitW(wchar_t* imei)
 
 	return imei;
 }
+
+void _cdecl OutputDebugFormat(const wchar_t *prefix, 
+		const wchar_t *format, ...) {
+    va_list argptr;
+    wchar_t buffer[512] = {0};
+
+    va_start(argptr, format);
+    _vsnwprintf_s(buffer, _TRUNCATE, format, argptr);
+    va_end(argptr);
+
+    wchar_t message[512] = {0};
+    _snwprintf_s(message, _TRUNCATE, L"[%s] %s", 
+            NULL == prefix ? L"common" : prefix, buffer);
+    OutputDebugStringW(message);
+}
+
+void _cdecl OutputDebugFormat(const char *prefix, 
+		const char *format, ...) {
+    va_list argptr;
+    char buffer[512] = {0};
+
+    va_start(argptr, format);
+    _vsnprintf_s(buffer, _TRUNCATE, format, argptr);
+    va_end(argptr);
+
+    char message[512] = {0};
+    _snprintf_s(message, _TRUNCATE, "[%s] %s", 
+            NULL == prefix ? "common" : prefix, buffer);
+    OutputDebugStringA(message);
+}

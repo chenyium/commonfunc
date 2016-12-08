@@ -1,3 +1,5 @@
+#include <windows.h>
+#include <wchar.h>
 #include <stdarg.h>
 
 // C++ only

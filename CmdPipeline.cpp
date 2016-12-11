@@ -447,12 +447,6 @@ _cleanup:
 	return -1; // fail
 }
 
-void CCmdPipeline::DeleteProcess()
-{
-	if (NULL != m_hProcessCmd)
-		CloseHandle(m_hProcessCmd), m_hProcessCmd = NULL;
-}
-
 void CCmdPipeline::AbortProcess()
 {
 	if (NULL != m_hProcessCmd) {
@@ -468,754 +462,6 @@ void CCmdPipeline::CleanProcess()
 		TerminateProcess(m_hProcessCmd, 0);
 		CloseHandle(m_hProcessCmd), m_hProcessCmd = NULL;
 	}
-}
-
-void CCmdPipeline::CommandClear(HANDLE removed, int timeout)
-{
-    wchar_t szResult[vol::LEN_BUFFER] = {0};
-	SetTokenString(L"anything_clear");
-	CommandRead(removed, timeout, szResult, _countof(szResult));
-}
-
-/*!
- * author: chenyao
- *
- *****************************************************************************/
-bool CCmdPipeline::CommandCatch(wchar_t *result, int reslen)
-{
-	if (NULL == m_hOutputRead)
-		return false;
-
-	DWORD dwBytesRead;
-	char  szBufferTmp[1] = {0};
-
-	PeekNamedPipe(m_hOutputRead, szBufferTmp, 1, &dwBytesRead, NULL, NULL);
-	if (0 >= dwBytesRead) {
-		log_trace(L"CommandCatch: no data");
-		return false; // no data
-	}
-
-	char  szBuffer[vol::LEN_BUFF] = {0};
-    DWORD nCharsRead = 0;
-	DWORD nBytesRead = 0;
-
-	while (ReadFile(m_hOutputRead, szBuffer, _countof(szBuffer),
-                &nBytesRead, NULL)) {
-
-		if (0 == nBytesRead)
-			return false;
-
-		wchar_t *pWideCharStr = new wchar_t[nBytesRead + 1]();
-		int nWideChars = MultiByte2WideCharHex((unsigned char*) szBuffer, nBytesRead, 
-				pWideCharStr, nBytesRead+1);
-		if (0 >= nWideChars) {
-			delete[] pWideCharStr, pWideCharStr = NULL;
-			return false;
-		}
-
-		if ((int) nCharsRead + nWideChars >= reslen) {
-			delete[] pWideCharStr, pWideCharStr = NULL;
-			return false;
-		}
-
-		wmemcpy_s(result + nCharsRead, reslen - nCharsRead, 
-				pWideCharStr, nWideChars);
-		delete[] pWideCharStr, pWideCharStr = NULL;
-
-		nCharsRead += nWideChars;
-		memset(szBuffer, 0, sizeof(szBuffer));
-		nBytesRead = 0;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- *****************************************************************************/
-bool CCmdPipeline::AnalysisAdbResult(wchar_t *result, int reslen,
-        const wchar_t *token, bool check)
-{
-    wchar_t *pEndding = NULL;
-
-    pEndding = wcsstr(result, token);
-	if (NULL == pEndding) {
-        safe_sprintf(result, reslen, L"endding is empty");
-		return false;
-    }
-
-    if (false == check) {
-        *pEndding = 0, stringtrimw(result);
-        return true;
-    }
-
-    wchar_t szTemp[vol::LEN_BUFF] = {0};
-    safe_sprintf(szTemp, L"%s", pEndding);
-
-    wchar_t *pTokenTemp = NULL;
-    wchar_t *pTokenNext = NULL;
-
-    pTokenTemp = wcstok_s(szTemp, L":", &pTokenNext);
-    if (NULL == pTokenTemp) {
-        safe_sprintf(result, reslen, L"endding is missing");
-        return false;
-    }
-
-    if (stringisdiffw(stringtrimw(pTokenTemp), token)) {
-        safe_sprintf(result, reslen, L"endding is different");
-        return false;
-    }
-
-    if (stringisdiffw(stringtrimw(pTokenNext), label::ADB_SUCCESS)) {
-        safe_sprintf(result, reslen, L"endding is failure");
-        return false;
-    }
-
-	*pEndding = 0, stringtrimw(result);
-	return true;
-}
-
-/*!
- * author: chenyao
- * label::ADB_TOKEN_SHELL
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbShell(HANDLE removed, int timeout, 
-        const wchar_t *command, wchar_t *result, int reslen)
-{
-	if (NULL == command) {
-		safe_sprintf(m_szErrors, L"command is null");
-		return false;
-	}
-
-	if (false == CommandExec(command)) {
-		safe_overwrite(m_szErrors, L"send:%s", m_szErrors);
-		return false;
-	}
-
-    wchar_t szResult[vol::LEN_BUFFER] = {0};
-
-	SetTokenString(label::ADB_TOKEN_SHELL);
-	int nResultLen = CommandRead(removed, timeout, 
-			szResult, _countof(szResult));
-    log_trace(szResult);
-	CleanProcess();
-
-	if (0 >= nResultLen) {
-		safe_overwrite(m_szErrors, L"read:%s", m_szErrors);
-		return false;
-	}
-
-	/** Analysis result */
-	if (!AnalysisAdbResult(szResult, _countof(szResult), 
-                label::ADB_TOKEN_SHELL, false)) {
-		safe_sprintf(m_szErrors, L"%s", szResult);
-		return false;
-	}
-
-	if (NULL != result && 0 != reslen)
-		safe_sprintf(result, reslen, L"%s", stringtrimw(szResult));
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbCommand(HANDLE removed, int timeout, 
-		const wchar_t *command, const wchar_t *token, wchar_t *result, int reslen)
-{
-	if (NULL == command || NULL == token)
-		return false;
-
-	if (false == CommandExec(command)) {
-		safe_overwrite(m_szErrors, L"send:%s", m_szErrors);
-		return false;
-	}
-
-    wchar_t szResult[vol::LEN_BUFFER] = {0};
-
-	SetTokenString(token);
-	int nResultLen = CommandRead(removed, timeout, 
-            szResult, _countof(szResult));
-	log_trace(szResult);
-	CleanProcess();
-
-	if (0 >= nResultLen) {
-		safe_overwrite(m_szErrors, L"read:%s", m_szErrors);
-		return false;
-	}
-
-	/** Analysis result */
-	if (!AnalysisAdbResult(szResult, _countof(szResult), token)) {
-		safe_sprintf(m_szErrors, L"%s", szResult);
-		return false;
-	}
-
-	if (NULL != result && 0 != reslen)
-		safe_sprintf(result, reslen, L"%s", stringtrimw(szResult));
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdb(HANDLE removed, int timeout, const TCHAR *serial, 
-		const TCHAR *command, const TCHAR *token, TCHAR *result, int reslen)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_COMMAND, serial, command);
-	log_trace(szCommand);
-
-	if (!ExecuteAdbCommand(removed, timeout, 
-				szCommand, token, result, reslen)) {
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbWithout(const TCHAR *serial, const TCHAR *command)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_COMMAND, serial, command);
-	log_trace(szCommand);
-
-	if (false == CommandExec(szCommand)) {
-		return false;
-	}
-
-	DeleteProcess();
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteShell(HANDLE removed, int timeout, 
-        const TCHAR *serial, const TCHAR *command, TCHAR *result, int reslen)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_SHELL_M, serial, command);
-	log_trace(szCommand);
-
-	if (!ExecuteAdbShell(removed, timeout, szCommand, result, reslen)) {
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteShellWithout(const TCHAR *serial, const TCHAR *command)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_SHELL_M, serial, command);
-	log_trace(szCommand);
-
-	if (false == CommandExec(szCommand)) {
-		return false;
-	}
-
-	DeleteProcess();
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- *****************************************************************************/
-bool CCmdPipeline::ExecuteShellLs(HANDLE removed, int timeout, 
-        const TCHAR *serial, const TCHAR *path)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_SHELL_LS, serial, path);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFF] = {0};
-
-	if (!ExecuteAdbShell(removed, timeout, szCommand, 
-                szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
-		return false;
-	}
-
-	if (stringisdiffw(szResult, path)) {
-		safe_sprintf(m_szErrors, L"file is not existed");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- *****************************************************************************/
-bool CCmdPipeline::ExecuteShellPsn(HANDLE removed, int timeout, 
-        const TCHAR *serial, TCHAR *result, int reslen)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_SHELL_PSN, serial);
-	log_trace(szCommand);
-
-	if (!ExecuteFlashcmdBase(removed, timeout, serial, szCommand,
-				result, reslen)) {
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteShellGetprop(HANDLE removed, int timeout, 
-        const TCHAR *serial, const TCHAR *prop, TCHAR *result, int reslen)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_SHELL_GETPROP, serial, prop);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFF] = {0};
-
-	if (!ExecuteAdbShell(removed, timeout, szCommand, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	safe_sprintf(result, reslen, _T("%s"), szResult);
-
-	if (stringiszerow(result)) {
-		safe_sprintf(m_szErrors, L"prop is null");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteShellSetprop(HANDLE removed, int timeout, 
-		const TCHAR *serial, const TCHAR *prop, const TCHAR *value)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_SHELL_SETPROP, serial, prop, value);
-	log_trace(szCommand);
-
-	wchar_t szResult[vol::LEN_BUFF] = {0};
-
-	if (!ExecuteAdbShell(removed, timeout, szCommand, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringcontainw(szResult, label::ADB_FAILURE)) {
-		safe_sprintf(m_szErrors, L"setprop failed");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- * vol::LEN_BUFF
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbPull(HANDLE removed, int timeout, 
-        const TCHAR *serial, const TCHAR *path, const TCHAR *target)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_PULL_FILE, serial, path, target);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFF] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, label::ADB_TOKEN_PULL, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
-		return false;
-	}
-
-	if (false == stringcontainw(szResult, label::ADB_TOKEN_KBS)) {
-		safe_sprintf(m_szErrors, L"KBS is missing");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- * vol::LEN_BUFFER
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbPullPath(HANDLE removed, int timeout, 
-        const TCHAR *serial, const TCHAR *path, const TCHAR *target)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_PULL_FILE, serial, path, target);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFFER] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, label::ADB_TOKEN_PULL, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
-		return false;
-	}
-
-	if (false == stringcontainw(szResult, label::ADB_TOKEN_KBS)) {
-		safe_sprintf(m_szErrors, L"KBS is missing");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbPush(HANDLE removed, int timeout, 
-        const TCHAR *serial, const TCHAR *path, const TCHAR *target)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_PUSH_FILE, serial, path, target);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFF] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, label::ADB_TOKEN_PUSH, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
-		return false;
-	}
-
-	if (false == stringcontainw(szResult, label::ADB_TOKEN_KBS)) {
-		safe_sprintf(m_szErrors, L"KBS is missing");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbForward(HANDLE removed, int timeout, 
-        const TCHAR *serial, int client, int remote)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_FORWARD, serial, client, remote);
-	log_trace(szCommand);
-
-	if (!ExecuteAdbCommand(removed, timeout, 
-                szCommand, label::ADB_TOKEN_FORWARD)) {
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbDescription(HANDLE removed, int timeout, 
-        const TCHAR *serial, TCHAR *result, int reslen)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_GET_DESC, serial);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFF] = {0};
-	
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, label::ADB_TOKEN_DESC, 
-                szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
-		return false;
-	}
-
-	wchar_t szTemp[vol::LEN_BUFF] = {0};
-	wchar_t *pTokenTemp = NULL;
-	wchar_t *pTokenNext = NULL;
-
-	wcscpy_s(szTemp, _countof(szTemp), szResult);
-	pTokenTemp = wcstok_s(szTemp, L":", &pTokenNext);
-	if (NULL == pTokenTemp) {
-		safe_sprintf(m_szErrors, L"result is missing");
-		return false;
-	}
-
-	if (stringisdiffw(stringtrimw(pTokenTemp), label::ADB_TOKEN_USB)) {
-		safe_sprintf(m_szErrors, L"usb is missing");
-		return false;
-	}
-
-	safe_sprintf(result, reslen, _T("%s"), stringtrimw(pTokenNext));
-
-	if (stringiszerow(result)) {
-		safe_sprintf(m_szErrors, L"usb version is null");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbState(HANDLE removed, int timeout, 
-        const TCHAR *serial, TCHAR *result, int reslen)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_GET_STATE, serial);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFF] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, label::ADB_TOKEN_STATE, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	safe_sprintf(result, reslen, _T("%s"), szResult);
-
-	if (stringiszerow(result)) {
-		safe_sprintf(m_szErrors, L"state is null");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbInstall(HANDLE removed, int timeout, 
-        const TCHAR *serial, const TCHAR *path)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_INSTALL, serial, path);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFF] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, label::ADB_TOKEN_INSTALL, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
-		return false;
-	}
-
-	if (false == stringcontainw(szResult, label::ADB_INSTALL)) {
-		safe_sprintf(m_szErrors, L"install failed");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteAdbDevices(HANDLE removed, int timeout, 
-		TCHAR *result, int reslen)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_DEVICES);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFFER] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, label::ADB_TOKEN_DEVICES, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
-		return false;
-	}
-
-	if (false == stringcontainw(szResult, label::DEVICES_LIST)) {
-		safe_sprintf(m_szErrors, L"list is missing");
-		return false;
-	}
-
-	safe_overwrite(szResult, _T("%s"), szResult + wcslen(label::DEVICES_LIST));
-	safe_sprintf(result, reslen, _T("%s"), szResult);
-
-	if (stringiszerow(stringtrimw(result))) {
-		safe_sprintf(m_szErrors, L"device is empty");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
-* author: chenyao
-*
-******************************************************************************/
-bool CCmdPipeline::ExecuteAdbUsb(HANDLE removed, int timeout, const TCHAR *serial)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_USB, serial);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFF] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, label::ADB_TOKEN_REBOOT, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringisdiffw(szResult, label::REBOOT_USB_MODE)) 
-		return false;
-
-	return true;
-}
-
-bool CCmdPipeline::ExecuteAdbStartServer(HANDLE removed, int timeout)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::ADB_STARTSERVER);
-	log_trace(szCommand);
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, 
-				label::ADB_TOKEN_START)) {
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteWlanConnect(HANDLE removed, int timeout, 
-		const TCHAR *serial, TCHAR *result, int reslen)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, wlan::ADB_CONNECT, serial);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFFER] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, wlan::ADB_TOKEN_CONNECT, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
-		return false;
-	}
-
-	if (stringcontainw(szResult, label::ADB_FAILURE)) {
-		safe_sprintf(m_szErrors, L"connect failure");
-		return false;
-	}
-
-	if (!stringcontainw(szResult, wlan::ADB_STATUS)) {
-		safe_sprintf(m_szErrors, L"connect failure");
-		return false;
-	}
-
-	safe_sprintf(result, reslen, _T("%s:%d"), serial, wlan::ADB_PORT);
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- ******************************************************************************/
-bool CCmdPipeline::ExecuteWlanDisconnect(HANDLE removed, int timeout, 
-		const TCHAR *serial)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, wlan::ADB_DISCONNECT, serial);
-	log_trace(szCommand);
-
-    wchar_t szResult[vol::LEN_BUFFER] = {0};
-
-	if (!ExecuteAdbCommand(removed, timeout, szCommand, wlan::ADB_TOKEN_DISCONNECT, 
-				szResult, _countof(szResult))) {
-		return false;
-	}
-
-	if (stringcontainw(szResult, label::ADB_FAILURE)) {
-		safe_sprintf(m_szErrors, L"disconnect failure");
-		return false;
-	}
-
-	return true;
 }
 
 /*!
@@ -1324,59 +570,874 @@ bool CCmdPipeline::ExecuteFastboot(HANDLE removed, int timeout, const TCHAR *ser
 	return true;
 }
 
-/*!
- * author: chenyao
- * flashcmd
- ******************************************************************************/
-bool CCmdPipeline::ExecuteFlashcmdBase(HANDLE removed, int timeout, 
-		const TCHAR *serial, const TCHAR *command, TCHAR *result, int reslen)
+CPipeline::CPipeline()
+	: m_pathModule  (L"")
+	, m_process     (nullptr)
+	, m_removed     (nullptr)
+	, m_inputRead   (nullptr)
+	, m_inputWrite  (nullptr)
+	, m_outputRead  (nullptr)
+	, m_outputWrite (nullptr)
+	, m_errorWrite  (nullptr)
+	, m_function    (nullptr)
+	, m_object      (nullptr)
 {
-	TCHAR szCommand[vol::LEN_CMD] = {0};
+	memset(m_errormsg, 0, sizeof(m_errormsg));
+}
 
-	if (NULL == serial || 0 == _tcslen(serial))
-		safe_sprintf(szCommand, cmd::ADB_SHELL_S, command);
-	else
-		safe_sprintf(szCommand, cmd::ADB_SHELL_M, serial, command);
+CPipeline::~CPipeline()
+{ }
 
-	log_trace(szCommand);
+bool CPipeline::Initialize()
+{
+	HANDLE outputRead = nullptr;
+	HANDLE inputWrite = nullptr;
 
-	TCHAR szResult[vol::LEN_BUFF] = {0};
+	// Set the bInheritHandle flag, so pipe handles are inherited. 
+	SECURITY_ATTRIBUTES saAttr;
+	memset(&saAttr, 0, sizeof(SECURITY_ATTRIBUTES));
 
-	if (!ExecuteAdbShell(removed, timeout, szCommand, 
-				szResult, _countof(szResult))) {
+	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+	saAttr.lpSecurityDescriptor = nullptr;
+	saAttr.bInheritHandle = TRUE;
+
+	// Create the child output pipe.
+	if (!CreatePipe(&outputRead, &m_outputWrite, &saAttr, 0)) {
+		safe_sprintf(m_errormsg, L"create stdout pipe failed");
 		return false;
 	}
 
-	if (stringiszerow(szResult)) {
-		safe_sprintf(m_szErrors, L"result is empty");
+	// Create the child input pipe.
+	if (!CreatePipe(&m_inputRead, &inputWrite, &saAttr, 0)) {
+		safe_sprintf(m_errormsg, L"create stdin pipe failed");
 		return false;
 	}
 
-	wchar_t *pTokenTemp = NULL;
-	wchar_t *pTokenNext = NULL;
-
-	pTokenTemp = wcstok_s(szResult, L":", &pTokenNext);
-	if (NULL == pTokenTemp) {
-		safe_sprintf(m_szErrors, L"OKEY is missing");
+	// Create a duplicate of the output write handle for the std error write handle. 
+	// This is necessary in case the child application closes one of its std output handles.
+	if (!DuplicateHandle(GetCurrentProcess(), m_outputWrite, 
+				GetCurrentProcess(), &m_errorWrite, 0, TRUE, DUPLICATE_SAME_ACCESS)) {
+		safe_sprintf(m_errormsg, L"DuplicateHandle Error");
 		return false;
 	}
 
-	if (stringisdiffw(stringtrimw(pTokenTemp), label::ADB_TOKEN_OKEY)) {
-		safe_sprintf(m_szErrors, L"OKEY is missing");
+	// Create new output read handle and the input write handles. Set
+	// the Properties to FALSE. Otherwise, the child inherits the
+	// properties and, as a result, non-closeable handles to the pipes
+	// are created.
+	if (!DuplicateHandle(GetCurrentProcess(), outputRead, GetCurrentProcess(), &m_outputRead, 
+				0, FALSE/*Make it uninheritable*/, DUPLICATE_SAME_ACCESS)) {
+		safe_sprintf(m_errormsg, L"DuplicateHandle Error");
 		return false;
 	}
 
-	if (NULL != result && 0 != reslen) {
-		pTokenTemp = wcstok_s(NULL, L"\r\n", &pTokenNext);
-		if (NULL == pTokenTemp) {
-			safe_sprintf(m_szErrors, L"result is missing");
+	if (!DuplicateHandle(GetCurrentProcess(), inputWrite, GetCurrentProcess(), &m_inputWrite, 
+				0, FALSE/*Make it uninheritable*/, DUPLICATE_SAME_ACCESS)) {
+		safe_sprintf(m_errormsg, L"DuplicateHandle Error");
+		return false;
+	}
+
+	CloseHandle(outputRead), outputRead = nullptr;
+	CloseHandle(inputWrite), inputWrite = nullptr;
+
+	// set outputRead non-block
+	DWORD dwMode = PIPE_NOWAIT;
+	if (!SetNamedPipeHandleState(m_outputRead, &dwMode, NULL, NULL)) {
+		safe_sprintf(m_errormsg, L"SetNamedPipeHandleState Error");
+		return false;
+	}
+
+	return true;
+}
+
+void CPipeline::Release()
+{
+	ProcessAbort();
+
+	CloseHandle(m_inputRead),   m_inputRead   = nullptr;
+	CloseHandle(m_inputWrite),  m_inputWrite  = nullptr;
+	CloseHandle(m_outputRead),  m_outputRead  = nullptr;
+	CloseHandle(m_outputWrite), m_outputWrite = nullptr;
+	CloseHandle(m_errorWrite),  m_errorWrite  = nullptr;
+
+	SetRouterFunc(nullptr, nullptr);
+}
+
+bool CPipeline::CommandExec(const wchar_t *command)
+{
+	// Set up members of the STARTUPINFO structure. 
+	// This structure specifies the STDIN handle for redirection. 
+	STARTUPINFO startupInfo  = {sizeof(STARTUPINFO)}; 
+
+	startupInfo.hStdInput    = m_inputRead;
+	startupInfo.hStdOutput   = m_outputWrite;
+	startupInfo.hStdError    = m_errorWrite;
+	startupInfo.dwFlags      = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+	startupInfo.wShowWindow |= SW_HIDE;
+
+	// Set up members of the PROCESS_INFORMATION structure.  
+	PROCESS_INFORMATION processInfo; 
+	memset(&processInfo, 0, sizeof(PROCESS_INFORMATION));
+	
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+    safe_sprintf(commandLocal, L"%s", command);
+
+	// create the child process.   
+	if (!CreateProcessW(NULL, commandLocal, NULL, NULL, TRUE, 0, NULL,
+				m_pathModule.empty() ? NULL : m_pathModule.c_str(), 
+				&startupInfo, &processInfo)) {
+        safe_sprintf(m_errormsg, L"create command (%d)", GetLastError());
+		return false;
+	}
+
+    CloseHandle(processInfo.hThread), processInfo.hThread = nullptr;
+	m_process = processInfo.hProcess;
+
+	return true;
+}
+
+bool CPipeline::CommandSend(const wchar_t *command, int cmdlen)
+{
+	if (NULL == command || 0 == cmdlen) {
+		safe_sprintf(m_errormsg, L"command is null");
+		return false;
+	}
+
+	CArrayPoint<unsigned char> commandLocal(cmdlen + 1);
+
+    int length = WideChar2MultiByteHex(command, cmdlen, 
+			commandLocal, commandLocal.capacity());
+
+    if (0 >= length) {
+		safe_sprintf(m_errormsg, L"WideChar2MultiByteHex (%d)", GetLastError());
+		return false;
+    }
+	
+	DWORD writeLength = 0;
+
+	if (!WriteFile(m_inputWrite, commandLocal, length, &writeLength, NULL)
+			|| length != static_cast<int>(writeLength)) {
+        safe_sprintf(m_errormsg, L"WriteFile failed (%d)", GetLastError());
+		return false;
+	}
+	
+	return true;
+}
+
+int CPipeline::CommandRead(int timeout_ms, wchar_t *result, int reslen)
+{
+	HANDLE handleArray[2] = { m_removed, m_process };
+
+	switch (WaitForMultipleObjects(_countof(handleArray), handleArray, 
+				FALSE, timeout_ms)) {
+	case WAIT_OBJECT_0:
+		safe_sprintf(m_errormsg, L"device removed");
+		goto _cleanup;
+	case WAIT_OBJECT_0 + 1:
+		ProcessClose();
+		break;
+	default:
+		safe_sprintf(m_errormsg, L"read timeout");
+		goto _cleanup;
+	}
+
+    unsigned long charsRead = 0;
+	unsigned long bytesRead = 0;
+	unsigned char buffer[vol::LEN_BUFF] = {0};
+
+	while (PeekNamedPipe(m_outputRead, buffer, 1, &bytesRead, NULL, NULL)
+				&& 0 < bytesRead) {
+		memset(buffer, 0, sizeof(buffer));
+		bytesRead = 0;
+
+		ReadFile(m_outputRead, buffer, _countof(buffer), &bytesRead, NULL);
+		if (0 == bytesRead) {
+			safe_sprintf(m_errormsg, L"ReadFile failed (%d)", GetLastError());
+			goto _cleanup;
+		}
+
+		CArrayPoint<wchar_t> bufferArray(bytesRead + 1);
+
+		int wideChars = MultiByte2WideCharHex(buffer, bytesRead, 
+				bufferArray, bufferArray.capacity());
+
+		if (0 >= wideChars) {
+			safe_sprintf(m_errormsg, L"MultiByte2WideCharHex (%d)", GetLastError());
+			goto _cleanup;
+		}
+
+		if (static_cast<int>(charsRead) + wideChars >= reslen) {
+			safe_sprintf(m_errormsg, L"buffer is small");
+			goto _cleanup;
+		}
+
+		wmemcpy_s(result + charsRead, reslen - charsRead, bufferArray, wideChars);
+		charsRead += wideChars;
+	}
+
+	return charsRead;
+
+_cleanup:
+	ProcessAbort();
+	return -1; // fail
+}
+
+int CPipeline::CommandRead(const wchar_t *token, int timeout_ms, wchar_t *result, int reslen)
+{    
+	unsigned long charsRead = 0;
+	unsigned long endedTime = GetTickCount() + timeout_ms;
+	
+	do {
+		switch(WaitForSingleObject(m_removed, 10)) {
+		case WAIT_OBJECT_0:
+            safe_sprintf(m_errormsg, L"device removed");
+			goto _cleanup;
+		}
+
+		unsigned long bytesRead = 0;
+		unsigned char buffer[vol::LEN_BUFF] = {0};
+
+		PeekNamedPipe(m_outputRead, buffer, 1, &bytesRead, NULL, NULL);
+
+        if (0 >= bytesRead)
+            continue;
+
+		memset(buffer, 0, sizeof(buffer));
+		bytesRead = 0;
+
+        while (ReadFile(m_outputRead, buffer, vol::LEN_BUFF, &bytesRead, NULL)) {
+            if (0 == bytesRead) {
+				safe_sprintf(m_errormsg, L"ReadFile failed (%d)", GetLastError());
+                goto _cleanup;
+            }
+
+			CArrayPoint<wchar_t> bufferArray(bytesRead + 1);
+
+			int wideChars = MultiByte2WideCharHex(buffer, bytesRead, 
+				bufferArray, bufferArray.capacity());
+
+			if (0 >= wideChars) {
+				safe_sprintf(m_errormsg, L"MultiByte2WideCharHex (%d)", GetLastError());
+				goto _cleanup;
+			}
+
+			if (static_cast<int>(charsRead) + wideChars >= reslen) {
+				safe_sprintf(m_errormsg, L"buffer is small");
+				goto _cleanup;
+			}
+
+			wmemcpy_s(result + charsRead, reslen - charsRead, bufferArray, wideChars);
+			charsRead += wideChars;
+
+            memset(buffer, 0, sizeof(buffer));
+            bytesRead = 0;
+		}
+
+		if (nullptr != wcsstr(result, token)) {
+			return charsRead; // pass
+        }
+	} while (GetTickCount() <= endedTime);
+
+	safe_sprintf(m_errormsg, L"read timeout");
+
+_cleanup:
+	ProcessAbort();
+	return -1; // fail
+}
+
+bool CPipeline::ExecuteCatch(wchar_t *result, int reslen)
+{	
+    unsigned long charsRead = 0;
+	unsigned long bytesRead = 0;
+	unsigned char buffer[vol::LEN_BUFF] = {0};
+
+	PeekNamedPipe(m_outputRead, buffer, 1, &bytesRead, NULL, NULL);
+
+	if (0 >= bytesRead) {
+		log_trace(L"CommandCatch: no data");
+		return false; // no data
+	}
+
+	memset(buffer, 0, sizeof(buffer));
+	bytesRead = 0;
+
+	while (ReadFile(m_outputRead, buffer, _countof(buffer), &bytesRead, NULL)) {
+		if (0 == bytesRead)
+			return false;
+
+		CArrayPoint<wchar_t> bufferArray(bytesRead + 1);
+
+		int wideChars = MultiByte2WideCharHex(buffer, bytesRead, 
+                bufferArray, bufferArray.capacity());
+
+		if (0 >= wideChars)
+			return false;
+
+		if (static_cast<int>(charsRead) + wideChars >= reslen)
+			return false;
+
+		wmemcpy_s(result + charsRead, reslen - charsRead, bufferArray, wideChars);
+		charsRead += wideChars;
+
+		memset(buffer, 0, sizeof(buffer));
+		bytesRead = 0;
+	}
+
+	return true;
+}
+
+bool CPipeline::ExecuteRead(const wchar_t *token, int timeout_ms, wchar_t *result, int reslen)
+{
+	wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	int resultLen = CommandRead(token, timeout_ms, resultLocal, _countof(resultLocal));
+	log_trace(resultLocal);
+
+	ProcessAbort();
+
+	if (0 >= resultLen) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
+		return false;
+	}
+
+	if (nullptr != result && 0 != reslen)
+		safe_sprintf(result, reslen, stringtrimw(resultLocal));
+
+	return true;
+}
+
+bool CPipeline::ExecuteSend(const wchar_t *command, int cmdlen)
+{
+	if (nullptr == command || 0 == cmdlen) {
+		safe_sprintf(m_errormsg, L"command is null");
+		goto _cleanup;
+	}
+
+	if (false == CommandSend(command, cmdlen))
+		goto _cleanup;
+
+	return true;
+
+_cleanup:
+	ProcessAbort();
+	return false;
+}
+
+bool CPipeline::ExecuteSend(const unsigned char *command, int cmdlen)
+{
+	CArrayPoint<wchar_t> bufferArray(cmdlen + 1);
+
+	if (nullptr == command || 0 == cmdlen) {
+		safe_sprintf(m_errormsg, L"command is null");
+		goto _cleanup;
+	}
+
+	int length = MultiByte2WideCharHex(command, cmdlen, 
+			bufferArray, bufferArray.capacity());
+
+	if (0 >= length) {
+		safe_sprintf(m_errormsg, L"MultiByte2WideCharHex failed");
+		goto _cleanup;
+	}
+
+	if (false == CommandSend(bufferArray, length))
+		goto _cleanup;
+
+	return true;
+
+_cleanup:
+	ProcessAbort();
+	return false;
+}
+
+void CPipeline::ProcessClose()
+{
+	if (nullptr == m_process)
+		return;
+
+	CloseHandle(m_process), m_process = nullptr;
+}
+
+void CPipeline::ProcessAbort()
+{
+	if (nullptr == m_process)
+		return;
+
+	TerminateProcess(m_process, static_cast<unsigned int>(-1));
+	CloseHandle(m_process), m_process = nullptr;
+}
+
+void CPipeline::ProcessClean()
+{
+	if (nullptr == m_process)
+		return;
+
+	WaitForSingleObject(m_process, INFINITE);
+	CloseHandle(m_process), m_process = nullptr;
+}
+
+bool CShellAdb::ExecuteShell(const wchar_t *command, int timeout_ms, const wchar_t *token,  
+			bool check, wchar_t *result, int reslen)
+{
+	if (nullptr == command || 0 == wcslen(command)) {
+		safe_sprintf(m_errormsg, L"command is null");
+		return false;
+	}
+
+	if (false == CommandExec(command)) {
+		safe_overwrite(m_errormsg, L"send:%s", m_errormsg);
+		return false;
+	}
+
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	int resultLen = CommandRead(timeout_ms, resultLocal, _countof(resultLocal));
+    log_trace(resultLocal);
+
+	if (0 >= resultLen) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
+		return false;
+	}
+
+	if (false == AnalysisResult(resultLocal, token, check))
+		return false;
+
+	if (nullptr != result && 0 != reslen)
+		safe_sprintf(result, reslen, L"%s", stringtrimw(resultLocal));
+
+	return true;
+}
+
+bool CShellAdb::AnalysisResult(wchar_t *result, const wchar_t *token, bool check)
+{
+    wchar_t * endding = nullptr;
+
+    endding = wcsstr(result, token);
+	if (nullptr == endding) {
+        safe_sprintf(m_errormsg, L"endding is empty");
+		return false;
+    }
+
+    if (true == check) {
+		wchar_t buffer[vol::LEN_BUFF] = {0};
+		safe_sprintf(buffer, L"%s", endding);
+
+		wchar_t * tokenThis = nullptr;
+		wchar_t * tokenNext = nullptr;
+
+		tokenThis = wcstok_s(buffer, L":", &tokenNext);
+		if (nullptr == tokenThis) {
+			safe_sprintf(m_errormsg, L"endding is missing");
 			return false;
 		}
 
-		safe_sprintf(result, reslen, stringtrimw(pTokenTemp));
+		if (stringisdiffw(stringtrimw(tokenThis), token)) {
+			safe_sprintf(m_errormsg, L"endding is different");
+			return false;
+		}
+
+		if (stringisdiffw(stringtrimw(tokenNext), label::ADB_SUCCESS)) {
+			safe_sprintf(m_errormsg, L"endding is failure");
+			return false;
+		}
+	}
+
+	*endding = L'\0';
+	stringtrimw(result);
+
+	return true;
+}
+
+bool CShellAdb::ExecuteCommand(const wchar_t *command, int timeout_ms, 
+        wchar_t *result, int reslen)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_SHELL_M, m_serial.c_str(), command);
+	log_trace(commandLocal);
+
+	return ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, false, result, reslen);
+}
+
+bool CShellAdb::ExecuteCommand(const wchar_t *command, int timeout_ms, const wchar_t *token, 
+        wchar_t *result, int reslen)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_COMMAND, m_serial.c_str(), command);
+	log_trace(commandLocal);
+
+	return ExecuteShell(commandLocal, timeout_ms, token, true, result, reslen);
+}
+
+bool CShellAdb::ExecuteCommand(const wchar_t *command)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_SHELL_M, m_serial.c_str(), command);
+	log_trace(commandLocal);
+
+	if (false == CommandExec(commandLocal))
+		return false;
+
+	ProcessClose();
+
+	return true;
+}
+
+bool CShellAdb::ExecutePSN(int timeout_ms, wchar_t *result, int reslen)
+{
+	return ExecuteFlashcmdBase(cmd::ADB_SHELL_PSN, timeout_ms, result, reslen);
+}
+
+bool CShellAdb::ExecuteLS(int timeout_ms, const wchar_t *path)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_SHELL_LS, m_serial.c_str(), path);
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFF] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
+                false, resultLocal, _countof(resultLocal))) {
+        return false;
+    }
+
+	if (stringiszerow(resultLocal)) {
+		safe_sprintf(m_errormsg, L"result is empty");
+		return false;
+	}
+
+	if (stringisdiffw(resultLocal, path)) {
+		safe_sprintf(m_errormsg, L"file is not existed");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteGetProp(int timeout_ms, const wchar_t *prop, 
+        wchar_t *result, int reslen)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_SHELL_GETPROP, m_serial.c_str(), prop);
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFF] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
+                false, resultLocal, _countof(resultLocal))) {
+        return false;
+    }
+
+	safe_sprintf(result, reslen, L"%s", resultLocal);
+
+	if (stringiszerow(result)) {
+		safe_sprintf(m_errormsg, L"prop is null");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteSetProp(int timeout_ms, const wchar_t *prop, const wchar_t *value)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_SHELL_SETPROP, m_serial.c_str(), prop, value);
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFF] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
+                false, resultLocal, _countof(resultLocal))) {
+        return false;
+    }
+
+	if (stringcontainw(resultLocal, label::ADB_FAILURE)) {
+		safe_sprintf(m_errormsg, L"setprop failed");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteDevices(int timeout_ms, wchar_t *result, int reslen)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_DEVICES);
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_DEVICES, 
+				true, resultLocal, _countof(resultLocal))) {
+		return false;
+	}
+
+	if (stringiszerow(resultLocal)) {
+		safe_sprintf(m_errormsg, L"result is empty");
+		return false;
+	}
+
+	if (false == stringcontainw(resultLocal, label::DEVICES_LIST)) {
+		safe_sprintf(m_errormsg, L"list is missing");
+		return false;
+	}
+
+	safe_overwrite(resultLocal, L"%s", resultLocal + wcslen(label::DEVICES_LIST));
+	safe_sprintf(result, reslen, _T("%s"), resultLocal);
+
+	if (stringiszerow(stringtrimw(result))) {
+		safe_sprintf(m_errormsg, L"device is empty");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteForward(int timeout_ms, int client, int remote)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_FORWARD, m_serial.c_str(), client, remote);
+	log_trace(commandLocal);
+
+	return ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_FORWARD);
+}
+
+bool CShellAdb::ExecuteStartServer(int timeout_ms)
+{
+	return ExecuteShell(cmd::ADB_STARTSERVER, timeout_ms, label::ADB_TOKEN_START);
+}
+
+bool CShellAdb::ExecutePull(int timeout_ms, const wchar_t *path, const wchar_t *target)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_PULL_FILE, m_serial.c_str(), path, target);
+	log_trace(commandLocal);
+
+    // large buffer
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_PULL, 
+				true, resultLocal, _countof(resultLocal))) {
+		return false;
+	}
+
+	if (stringiszerow(resultLocal)) {
+		safe_sprintf(m_errormsg, L"result is empty");
+		return false;
+	}
+
+	if (false == stringcontainw(resultLocal, label::ADB_TOKEN_KBS)) {
+		safe_sprintf(m_errormsg, L"KBS is missing");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecutePush(int timeout_ms, const wchar_t *path, const wchar_t *target)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_PUSH_FILE, m_serial.c_str(), path, target);
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_PUSH, 
+				true, resultLocal, _countof(resultLocal))) {
+		return false;
+	}
+
+	if (stringiszerow(resultLocal)) {
+		safe_sprintf(m_errormsg, L"result is empty");
+		return false;
+	}
+
+	if (false == stringcontainw(resultLocal, label::ADB_TOKEN_KBS)) {
+		safe_sprintf(m_errormsg, L"KBS is missing");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteDescription(int timeout_ms, wchar_t *result, int reslen)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_GET_DESC, m_serial.c_str());
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFF] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_DESC, 
+				true, resultLocal, _countof(resultLocal))) {
+		return false;
+	}
+
+	if (stringiszerow(resultLocal)) {
+		safe_sprintf(m_errormsg, L"result is empty");
+		return false;
+	}
+
+	wchar_t buffer[vol::LEN_BUFF] = {0};
+	wchar_t * tokenThis = nullptr;
+	wchar_t * tokenNext = nullptr;
+
+	wcscpy_s(buffer, _countof(buffer), resultLocal);
+	tokenThis = wcstok_s(buffer, L":", &tokenNext);
+
+	if (nullptr == tokenThis) {
+		safe_sprintf(m_errormsg, L"result is missing");
+		return false;
+	}
+
+	if (stringisdiffw(stringtrimw(tokenThis), label::ADB_TOKEN_USB)) {
+		safe_sprintf(m_errormsg, L"usb is missing");
+		return false;
+	}
+
+	safe_sprintf(result, reslen, L"%s", stringtrimw(tokenNext));
+
+	if (stringiszerow(result)) {
+		safe_sprintf(m_errormsg, L"usb version is null");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteState(int timeout_ms, wchar_t *result, int reslen)
+{	
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_GET_STATE, m_serial.c_str());
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFF] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_STATE, 
+				true, resultLocal, _countof(resultLocal))) {
+		return false;
+	}
+
+	safe_sprintf(result, reslen, L"%s", stringtrimw(resultLocal));
+
+	if (stringiszerow(result)) {
+		safe_sprintf(m_errormsg, L"state is null");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteInstall(int timeout_ms, const wchar_t *path)
+{	
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, cmd::ADB_INSTALL, m_serial.c_str(), path);
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFF] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_INSTALL, 
+				true, resultLocal, _countof(resultLocal))) {
+		return false;
+	}
+
+	if (stringiszerow(resultLocal)) {
+		safe_sprintf(m_errormsg, L"result is empty");
+		return false;
+	}
+
+	if (false == stringcontainw(resultLocal, label::ADB_INSTALL)) {
+		safe_sprintf(m_errormsg, L"install failed");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteUSB(int timeout_ms)
+{
+	wchar_t command[vol::LEN_CMD] = {0};
+
+	safe_sprintf(command, cmd::ADB_USB, m_serial.c_str());
+	log_trace(command);
+
+    wchar_t resultLocal[vol::LEN_BUFF] = {0};
+
+	if (!ExecuteShell(command, timeout_ms, label::ADB_TOKEN_REBOOT, 
+				true, resultLocal, _countof(resultLocal))) {
+		return false;
+	}
+
+	if (stringisdiffw(resultLocal, label::REBOOT_USB_MODE))  {
+		safe_sprintf(m_errormsg, L"restart usb failed");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellAdb::ExecuteFlashcmdBase(const wchar_t *command, int timeout_ms, 
+			wchar_t *result, int reslen)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	if (m_serial.empty())
+		safe_sprintf(commandLocal, cmd::ADB_SHELL_S, command);
+	else
+		safe_sprintf(commandLocal, cmd::ADB_SHELL_M, m_serial.c_str(), command);
+
+	log_trace(commandLocal);
+
+	wchar_t resultLocal[vol::LEN_BUFF] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
+				false, resultLocal, _countof(resultLocal))) {
+		return false;
+    }
+
+	if (stringiszerow(resultLocal)) {
+		safe_sprintf(m_errormsg, L"result is empty");
+		return false;
+	}
+
+	wchar_t * tokenThis = nullptr;
+	wchar_t * tokenNext = nullptr;
+
+	tokenThis = wcstok_s(resultLocal, L":", &tokenNext);
+	if (nullptr == tokenThis) {
+		safe_sprintf(m_errormsg, L"OKEY is missing");
+		return false;
+	}
+
+	if (stringisdiffw(stringtrimw(tokenThis), label::ADB_TOKEN_OKEY)) {
+		safe_sprintf(m_errormsg, L"OKEY is missing");
+		return false;
+	}
+
+	if (nullptr != result && 0 != reslen) {
+		tokenThis = wcstok_s(NULL, L"\r\n", &tokenNext);
+
+		if (nullptr == tokenThis) {
+			safe_sprintf(m_errormsg, L"result is missing");
+			return false;
+		}
+
+		safe_sprintf(result, reslen, stringtrimw(tokenThis));
 
 		if (stringiszero(result)) {
-			safe_sprintf(m_szErrors, L"result is null");
+			safe_sprintf(m_errormsg, L"result is null");
 			return false;
 		}
 	}
@@ -1384,172 +1445,123 @@ bool CCmdPipeline::ExecuteFlashcmdBase(HANDLE removed, int timeout,
 	return true;
 }
 
-/*!
- * author: chenyao
- * flashcmd
- ******************************************************************************/
-bool CCmdPipeline::ExecuteFlashcmdPrep(HANDLE removed, int timeout, 
-		const TCHAR *serial, int slot, TCHAR *result, int reslen)
+bool CShellAdb::ExecuteFlashcmdPrep(int timeout_ms, int slot, wchar_t *result, int reslen)
 {
-	TCHAR szCommand[vol::LEN_CMD] = {0};
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
 
-	safe_sprintf(szCommand, cmd::FLASHCMD_PREPARE, slot);
-	log_trace(szCommand);
+	safe_sprintf(commandLocal, cmd::FLASHCMD_PREPARE, slot);
+	log_trace(commandLocal);
 
-	if (!ExecuteFlashcmdBase(removed, timeout, 
-				serial, szCommand, result, reslen))
-		return false;
-
-	return true;
+	return ExecuteFlashcmdBase(commandLocal, timeout_ms, result, reslen);
 }
 
-/*!
- * author: chenyao
- * 
- ******************************************************************************/
-bool CCmdPipeline::ExecuteFlashcmdBurn(HANDLE removed,
-            const TCHAR *serial, int slot)
+bool CShellAdb::ExecuteFlashcmdBurn(int slot)
 {
-	wchar_t szCommand[vol::LEN_CMD] = {0};
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
 
-	if (NULL == serial || 0 == _tcslen(serial))
-		safe_sprintf(szCommand, cmd::ADB_SHELL_S, _T(""));
+	if (m_serial.empty())
+		safe_sprintf(commandLocal, cmd::ADB_SHELL_S, L"");
 	else
-		safe_sprintf(szCommand, cmd::ADB_SHELL_M, serial, _T(""));
-	log_trace(szCommand);
+		safe_sprintf(commandLocal, cmd::ADB_SHELL_M, m_serial.c_str(), L"");
 
-	if (false == CommandExec(szCommand))
+	log_trace(commandLocal);
+
+	if (false == CommandExec(commandLocal))
 		return false;
 
-	TCHAR szResult[vol::LEN_BUFF] = {0};
+	wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	SetTokenString(label::ADB_TOKEN_ROOT);
-	int nResultLen = CommandRead(removed, 5, szResult, _countof(szResult));
-	log_trace(szResult);
+	int resultLen = CommandRead(label::ADB_TOKEN_ROOT, 5000, 
+			resultLocal, _countof(resultLocal));
+	log_trace(resultLocal);
 
-	if (0 >= nResultLen) {
-		safe_overwrite(m_szErrors, L"read:%s", m_szErrors);
+	if (0 >= resultLen) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
 		return false;
 	}
 
-	safe_sprintf(szCommand, cmd::FLASHCMD_BURN, slot);
-	log_trace(szCommand);
-	safe_overwrite(szCommand, L"%s\n", szCommand);
+	safe_sprintf(commandLocal, cmd::FLASHCMD_BURN, slot);
+	log_trace(commandLocal);
+	safe_overwrite(commandLocal, L"%s\n", commandLocal);
 
-	if (!CommandSend(szCommand, wcslen(szCommand)))
+	if (false == CommandSend(commandLocal, wcslen(commandLocal)))
 		return false;
 
-	memset(szResult, 0, sizeof(szResult));
-	SetTokenString(stringtrimw(szCommand));
-	nResultLen = CommandRead(removed, 5, szResult, _countof(szResult));
-	log_trace(szResult);
+	memset(resultLocal, 0, sizeof(resultLocal));
+	resultLen = CommandRead(stringtrimw(resultLocal), 5000, 
+			resultLocal, _countof(resultLocal));
+	log_trace(resultLocal);
 
-	if (0 >= nResultLen) {
-		safe_overwrite(m_szErrors, L"wait:%s", m_szErrors);
+	if (0 >= resultLen) {
+		safe_overwrite(m_errormsg, L"wait:%s", m_errormsg);
 		return false;
 	}
 
 	return true;
 }
 
-/*!
- * author: chenyao
- * 
- ******************************************************************************/
-bool CCmdPipeline::ExecuteFlashcmdRead(HANDLE removed, int timeout, 
-		const TCHAR *serial, int slot, TCHAR *result, int reslen)
+bool CShellAdb::ExecuteFlashcmdRead(int timeout_ms, int slot, wchar_t *result, int reslen)
 {
-	TCHAR szCommand[vol::LEN_CMD] = {0};
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
 
-	safe_sprintf(szCommand, cmd::FLASHCMD_READ, slot);
-	log_trace(szCommand);
+	safe_sprintf(commandLocal, cmd::FLASHCMD_READ, slot);
+	log_trace(commandLocal);
 
-	if (!ExecuteFlashcmdBase(removed, timeout, 
-				serial, szCommand, result, reslen))
-		return false;
-
-	return true;
+	return ExecuteFlashcmdBase(commandLocal, timeout_ms, result, reslen);
 }
 
-/*!
- * author: chenyao
- * 
- ******************************************************************************/
-bool CCmdPipeline::ExecuteRead(HANDLE removed, int timeout, 
-			const wchar_t *token, wchar_t *result, int reslen)
+bool CShellAdb::ExecuteWlanConnect(int timeout_ms, wchar_t *result, int reslen)
 {
-	TCHAR szResult[vol::LEN_BUFFER] = {0};
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
 
-	SetTokenString(token);
-	int nResultLen = CommandRead(removed, timeout, 
-				szResult, _countof(szResult));
-	log_trace(szResult);
-	AbortProcess();
+	safe_sprintf(commandLocal, wlan::ADB_CONNECT, m_serial.c_str());
+	log_trace(commandLocal);
 
-	if (0 >= nResultLen) {
-		safe_overwrite(m_szErrors, L"read:%s", m_szErrors);
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, wlan::ADB_TOKEN_CONNECT, 
+				true, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
-	if (NULL != reslen && 0 != reslen)
-		safe_sprintf(result, reslen, szResult);
+	if (stringiszerow(resultLocal)) {
+		safe_sprintf(m_errormsg, L"result is empty");
+		return false;
+	}
+
+	if (stringcontainw(resultLocal, label::ADB_FAILURE)) {
+		safe_sprintf(m_errormsg, L"connect failure");
+		return false;
+	}
+
+	if (!stringcontainw(resultLocal, wlan::ADB_STATUS)) {
+		safe_sprintf(m_errormsg, L"connect failure");
+		return false;
+	}
+
+	safe_sprintf(result, reslen, L"%s:%d", m_serial.c_str(), wlan::ADB_PORT);
 
 	return true;
 }
 
-/*!
- * author: chenyao
- * 
- ******************************************************************************/
-bool CCmdPipeline::ExecuteSend(const wchar_t *command, int cmdlen)
+bool CShellAdb::ExecuteWlanDisconnect(int timeout_ms)
 {
-	if (NULL == command || 0 == cmdlen) {
-		safe_sprintf(m_szErrors, _T("command is null"));
-		goto _cleanup;
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, wlan::ADB_DISCONNECT, m_serial.c_str());
+	log_trace(commandLocal);
+
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	if (!ExecuteShell(commandLocal, timeout_ms, wlan::ADB_TOKEN_DISCONNECT, 
+				true, resultLocal, _countof(resultLocal))) {
+		return false;
 	}
 
-	if (!CommandSend(command, cmdlen)) {
-		goto _cleanup;
+	if (stringcontainw(resultLocal, label::ADB_FAILURE)) {
+		safe_sprintf(m_errormsg, L"disconnect failure");
+		return false;
 	}
 
 	return true;
-
-_cleanup:
-	AbortProcess();
-	return false;
-}
-
-/*!
- * author: chenyao
- * 
- ******************************************************************************/
-bool CCmdPipeline::ExecuteSend(const unsigned char *command, int cmdlen)
-{
-	wchar_t *pCommand = NULL;
-
-	if (NULL == command || 0 == cmdlen) {
-		safe_sprintf(m_szErrors, _T("command is null"));
-		goto _cleanup;
-	}
-
-	pCommand = new wchar_t[cmdlen+1]();
-	int nLength = MultiByte2WideCharHex(command, cmdlen, pCommand, cmdlen+1);
-
-	if (0 >= nLength) {
-		safe_sprintf(m_szErrors, _T("MultiByte2WideCharHex failed"));
-		goto _cleanup;
-	}
-
-	if (!CommandSend(pCommand, nLength)) {
-		goto _cleanup;
-	}
-
-	delete[] pCommand, pCommand = NULL;
-	return true;
-
-_cleanup:
-	if (pCommand)
-		delete[] pCommand, pCommand = NULL;
-	AbortProcess();
-	return false;
 }

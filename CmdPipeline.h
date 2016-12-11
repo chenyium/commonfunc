@@ -50,8 +50,6 @@ public:
 public:
 	bool Initialize();
 	void SetTokenString(const wchar_t *token);
-    void CommandClear(HANDLE removed, int timeout = 10);
-    bool CommandCatch(wchar_t *result, int reslen);
 
 private:
     bool CommandExec(const wchar_t *command);
@@ -59,59 +57,9 @@ private:
     int  CommandRead(HANDLE removed, int timeout, wchar_t *result, int reslen);
 	void AbortProcess();
 	void CleanProcess();
-	void DeleteProcess();
 
 public:
     wchar_t* geterrors() { return m_szErrors; }
-
-private:
-	bool AnalysisAdbResult(wchar_t *result, int reslen, 
-			const wchar_t *token, bool check = true);
-	bool ExecuteAdbCommand(HANDLE removed, int timeout, const wchar_t *command, 
-            const wchar_t *token, wchar_t *result = NULL, int reslen = 0);
-	bool ExecuteAdbShell(HANDLE removed, int timeout, 
-            const wchar_t *command, wchar_t *result = NULL, int reslen = 0);
-
-public: // adb shell
-	bool ExecuteShell(HANDLE removed, int timeout, 
-            const TCHAR *serial, const TCHAR *command, TCHAR *result = NULL, int reslen = 0);
-	bool ExecuteShellWithout(const TCHAR *serial, const TCHAR *command);
-	bool ExecuteShellLs(HANDLE removed, int timeout, 
-            const TCHAR *serial, const TCHAR *path);
-	bool ExecuteShellPsn(HANDLE removed, int timeout, 
-            const TCHAR *serial, TCHAR *result, int reslen);
-	bool ExecuteShellGetprop(HANDLE removed, int timeout, 
-			const TCHAR *serial, const TCHAR *prop, TCHAR *result, int reslen);
-	bool ExecuteShellSetprop(HANDLE removed, int timeout, 
-			const TCHAR *serial, const TCHAR *prop, const TCHAR *value);
-
-public: // adb
-	bool ExecuteAdb(HANDLE removed, int timeout, const TCHAR *serial, 
-			const TCHAR *command, const TCHAR *token, TCHAR *result = NULL, int reslen = 0);
-	bool ExecuteAdbWithout(const TCHAR *serial, const TCHAR *command);
-	bool ExecuteAdbPull(HANDLE removed, int timeout, 
-            const TCHAR *serial, const TCHAR *path, const TCHAR *target);
-	bool ExecuteAdbPullPath(HANDLE removed, int timeout, 
-            const TCHAR *serial, const TCHAR *path, const TCHAR *target);
-	bool ExecuteAdbPush(HANDLE removed, int timeout, 
-            const TCHAR *serial, const TCHAR *path, const TCHAR *target);
-	bool ExecuteAdbForward(HANDLE removed, int timeout, 
-            const TCHAR *serial, int client, int remote);
-	bool ExecuteAdbDescription(HANDLE removed, int timeout, 
-            const TCHAR *serial, TCHAR *result, int reslen);
-	bool ExecuteAdbState(HANDLE removed, int timeout, 
-            const TCHAR *serial, TCHAR *result, int reslen);
-	bool ExecuteAdbInstall(HANDLE removed, int timeout, 
-            const TCHAR *serial, const TCHAR *path);
-	bool ExecuteAdbDevices(HANDLE removed, int timeout, TCHAR *result, int reslen);
-	bool ExecuteAdbUsb(HANDLE removed, int timeout, const TCHAR *serial);
-	bool ExecuteAdbStartServer(HANDLE removed, int timeout);
-
-public: // wlan
-	bool ExecuteWlanConnect(HANDLE removed, int timeout, 
-			const TCHAR *serial, TCHAR *result, int reslen);
-	bool ExecuteWlanDisconnect(HANDLE removed, int timeout, 
-			const TCHAR *serial);
 
 public: // fastboot
 	bool AnalysisFastbootResult(wchar_t *result, int reslen, 
@@ -122,21 +70,6 @@ public: // fastboot
 			const TCHAR *command, TCHAR *result = NULL, int reslen = 0, bool check = true);
 	bool ExecuteFastboot(HANDLE removed, int timeout, const TCHAR *serial, 
 			const TCHAR *command, TCHAR *result = NULL, int reslen = 0, bool check = true);
-
-public: // flashcmd
-	bool ExecuteFlashcmdBase(HANDLE removed, int timeout, 
-            const TCHAR *serial, const TCHAR *command, TCHAR *result = NULL, int reslen = 0);
-	bool ExecuteFlashcmdPrep(HANDLE removed, int timeout, 
-            const TCHAR *serial, int slot, TCHAR *result, int reslen);
-	bool ExecuteFlashcmdBurn(HANDLE removed, const TCHAR *serial, int slot);
-	bool ExecuteFlashcmdRead(HANDLE removed, int timeout, 
-            const TCHAR *serial, int slot, TCHAR *result, int reslen);
-
-public:
-	bool ExecuteRead(HANDLE removed, int timeout, 
-				const wchar_t *token, wchar_t *result = NULL, int reslen = 0);
-	bool ExecuteSend(const wchar_t *command, int cmdlen);
-	bool ExecuteSend(const unsigned char *command, int cmdlen);
 
 public:
 	void SetRouterFunc(void *object, void *func) { 
@@ -167,3 +100,173 @@ private:
 
 };
 
+#include <string>
+
+//! automatic delete array point
+/*! \author chenyao
+ */
+template <typename type> class CArrayPoint
+{
+public:
+	explicit CArrayPoint(int size) {
+		m_capacity = size;
+		m_point = new type[size]();
+	}
+	~CArrayPoint() {
+		delete[] m_point, m_point = nullptr;
+	}
+
+private:
+	CArrayPoint(CArrayPoint&);
+	CArrayPoint& operator =(CArrayPoint&);
+
+public:
+	operator type*() const { return m_point; }
+
+public:
+	inline int capacity() { return m_capacity; }
+	
+private:
+	type * m_point;
+	int m_capacity;
+};
+
+//! pipeline
+class CPipeline 
+{
+public:
+	CPipeline();
+	virtual ~CPipeline();
+
+private:
+	CPipeline(CPipeline&);
+	CPipeline& operator = (CPipeline&);
+
+public:
+	bool Initialize();
+	void Release();
+
+public:
+	inline void SetPathModule(const wchar_t * path) { m_pathModule = path; }
+	inline void SetHandleRemoved(HANDLE handle) { m_removed = handle; }
+
+public:
+	bool ExecuteCatch(wchar_t *result, int reslen);
+	bool ExecuteRead(const wchar_t *token, int timeout_ms, 
+			wchar_t *result = nullptr, int reslen = 0);
+	bool ExecuteSend(const wchar_t *command, int cmdlen);
+	bool ExecuteSend(const unsigned char *command, int cmdlen);
+
+protected:
+	bool CommandExec(const wchar_t *command);
+	bool CommandSend(const wchar_t *command, int cmdlen);
+    int  CommandRead(int timeout_ms, wchar_t *result, int reslen);
+    int  CommandRead(const wchar_t *token, int timeout_ms, wchar_t *result, int reslen);
+
+protected:
+	void ProcessAbort();
+	void ProcessClean();
+	void ProcessClose();
+
+public:
+	inline void SetRouterFunc(void *object, void *func) { 
+		m_object   = object;
+		m_function = static_cast<PROUTERMESSAGE>(func); 
+	}
+	inline void log_trace(wchar_t *message) {
+		if (m_function) 
+			m_function(m_object, message); 
+	}
+
+public:
+    const wchar_t* ErrorMessage() { return m_errormsg; }
+
+private:
+	typedef void (*PROUTERMESSAGE)(void*, wchar_t*);
+	PROUTERMESSAGE m_function;
+	void * m_object;
+
+protected:
+	wchar_t m_errormsg[256];
+
+private:
+	std::wstring m_pathModule;
+
+private:
+	HANDLE m_process;
+	HANDLE m_removed;
+	HANDLE m_inputRead;
+	HANDLE m_inputWrite;
+	HANDLE m_outputRead;
+	HANDLE m_outputWrite;
+	HANDLE m_errorWrite;
+};
+
+//! interface
+class CShellContext 
+{
+protected:
+	CShellContext() {}
+	virtual ~CShellContext() {}
+
+protected:
+	virtual bool ExecuteShell(const wchar_t *command, int timeout_ms, const wchar_t *token,  
+			bool check = true, wchar_t *result = nullptr, int reslen = 0) = 0;
+	virtual bool AnalysisResult(wchar_t *result, const wchar_t *token, bool check = true) = 0;
+
+public:
+	inline void SetSerial(const wchar_t * serial) { m_serial = serial; }
+
+protected:
+	std::wstring m_serial;
+};
+
+//! adb shell
+class CShellAdb : public CShellContext, public CPipeline
+{
+protected:
+	virtual bool ExecuteShell(const wchar_t *command, int timeout_ms, const wchar_t *token,  
+			bool check = true, wchar_t *result = nullptr, int reslen = 0);
+	virtual bool AnalysisResult(wchar_t *result, const wchar_t *token, bool check = true);
+
+public:
+	bool ExecuteCommand(const wchar_t *command, int timeout_ms,
+            wchar_t *result = nullptr, int reslen = 0);
+	bool ExecuteCommand(const wchar_t *command, int timeout_ms, const wchar_t *token, 
+			wchar_t *result = nullptr, int reslen = 0);
+	bool ExecuteCommand(const wchar_t *command);
+
+public:
+	bool ExecutePSN(int timeout_ms, wchar_t *result, int reslen);
+	bool ExecuteLS(int timeout_ms, const wchar_t *path);
+	bool ExecuteGetProp(int timeout_ms, const wchar_t *prop, wchar_t *result, int reslen);
+	bool ExecuteSetProp(int timeout_ms, const wchar_t *prop, const wchar_t *value);
+
+public:
+	bool ExecuteDevices(int timeout_ms, wchar_t *result, int reslen);
+	bool ExecuteForward(int timeout_ms, int client, int remote);
+	bool ExecuteStartServer(int timeout_ms);
+	bool ExecutePull(int timeout_ms, const wchar_t *path, const wchar_t *target);
+	bool ExecutePush(int timeout_ms, const wchar_t *path, const wchar_t *target);
+	bool ExecuteDescription(int timeout_ms, wchar_t *result, int reslen);
+	bool ExecuteState(int timeout_ms, wchar_t *result, int reslen);
+	bool ExecuteInstall(int timeout_ms, const wchar_t *path);
+	bool ExecuteUSB(int timeout_ms);
+
+public:
+	bool ExecuteFlashcmdBase(const wchar_t *command, int timeout_ms, 
+			wchar_t *result, int reslen);
+	bool ExecuteFlashcmdPrep(int timeout_ms, int slot, wchar_t *result, int reslen);
+	bool ExecuteFlashcmdBurn(int slot);
+	bool ExecuteFlashcmdRead(int timeout_ms, int slot, wchar_t *result, int reslen);
+
+public:
+	bool ExecuteWlanConnect(int timeout_ms, wchar_t *result, int reslen);
+	bool ExecuteWlanDisconnect(int timeout_ms);
+};
+
+//! fastboot shell
+class CShellFastboot : public CShellContext, public CPipeline
+{
+
+};

@@ -726,19 +726,34 @@ bool CPipeline::CommandSend(const wchar_t *command, int cmdlen)
 
 int CPipeline::CommandRead(int timeout_ms, wchar_t *result, int reslen)
 {
-	HANDLE handleArray[2] = { m_removed, m_process };
+	if (nullptr == m_process) {
+		safe_sprintf(m_errormsg, L"process is null");
+		return -1;
+	}
 
-	switch (WaitForMultipleObjects(_countof(handleArray), handleArray, 
-				FALSE, timeout_ms)) {
-	case WAIT_OBJECT_0:
-		safe_sprintf(m_errormsg, L"device removed");
-		goto _cleanup;
-	case WAIT_OBJECT_0 + 1:
-		ProcessClose();
-		break;
-	default:
-		safe_sprintf(m_errormsg, L"read timeout");
-		goto _cleanup;
+	if (nullptr == m_removed) {
+		switch (WaitForSingleObject(m_process, timeout_ms)) {
+		case WAIT_OBJECT_0:
+			ProcessClose();
+			break;
+		default: 
+			safe_sprintf(m_errormsg, L"read timeout or failed");
+			goto _cleanup;
+		}
+	} else {
+		HANDLE handleArray[2] = { m_removed, m_process };
+		switch (WaitForMultipleObjects(_countof(handleArray), handleArray, 
+					FALSE, timeout_ms)) {
+		case WAIT_OBJECT_0:
+			safe_sprintf(m_errormsg, L"device removed");
+			goto _cleanup;
+		case WAIT_OBJECT_0 + 1:
+			ProcessClose();
+			break;
+		default:
+			safe_sprintf(m_errormsg, L"read timeout or failed");
+			goto _cleanup;
+		}
 	}
 
     unsigned long charsRead = 0;
@@ -814,7 +829,7 @@ int CPipeline::CommandRead(const wchar_t *token, int timeout_ms, wchar_t *result
 			CArrayPoint<wchar_t> bufferArray(bytesRead + 1);
 
 			int wideChars = MultiByte2WideCharHex(buffer, bytesRead, 
-				bufferArray, bufferArray.capacity());
+					bufferArray, bufferArray.capacity());
 
 			if (0 >= wideChars) {
 				safe_sprintf(m_errormsg, L"MultiByte2WideCharHex (%d)", GetLastError());
@@ -1400,7 +1415,7 @@ bool CShellAdb::ExecuteFlashcmdBase(const wchar_t *command, int timeout_ms,
 
 	log_trace(commandLocal);
 
-	wchar_t resultLocal[vol::LEN_BUFF] = {0};
+	wchar_t resultLocal[vol::LEN_BUFFER] = {0};
 
 	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
 				false, resultLocal, _countof(resultLocal))) {
@@ -1436,7 +1451,7 @@ bool CShellAdb::ExecuteFlashcmdBase(const wchar_t *command, int timeout_ms,
 
 		safe_sprintf(result, reslen, stringtrimw(tokenThis));
 
-		if (stringiszero(result)) {
+		if (stringiszerow(result)) {
 			safe_sprintf(m_errormsg, L"result is null");
 			return false;
 		}
@@ -1488,7 +1503,7 @@ bool CShellAdb::ExecuteFlashcmdBurn(int slot)
 		return false;
 
 	memset(resultLocal, 0, sizeof(resultLocal));
-	resultLen = CommandRead(stringtrimw(resultLocal), 5000, 
+	resultLen = CommandRead(stringtrimw(commandLocal), 5000, 
 			resultLocal, _countof(resultLocal));
 	log_trace(resultLocal);
 

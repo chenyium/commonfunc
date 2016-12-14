@@ -663,6 +663,16 @@ void CPipeline::Release()
 	SetRouterFunc(nullptr, nullptr);
 }
 
+static wchar_t * SegmentCommand(wchar_t * path)
+{
+	wchar_t * tokenThis = nullptr;
+	wchar_t * tokenNext = nullptr;
+
+	tokenThis = wcstok_s(path, L" ", &tokenNext);
+
+	return tokenNext;
+}
+
 bool CPipeline::CommandExec(const wchar_t *command)
 {
 	// Set up members of the STARTUPINFO structure. 
@@ -678,9 +688,18 @@ bool CPipeline::CommandExec(const wchar_t *command)
 	// Set up members of the PROCESS_INFORMATION structure.  
 	PROCESS_INFORMATION processInfo; 
 	memset(&processInfo, 0, sizeof(PROCESS_INFORMATION));
+
+//	SetCurrentDirectoryW(m_pathModule.c_str());
 	
 	wchar_t commandLocal[vol::LEN_CMD] = {0};
-    safe_sprintf(commandLocal, L"%s", command);
+	safe_sprintf(commandLocal, command);
+
+	wchar_t * parameter = SegmentCommand(commandLocal);
+
+	if (m_pathModule.empty())
+		safe_overwrite(commandLocal, L"%s %s", commandLocal, parameter);
+	else
+		safe_overwrite(commandLocal, L"\"%s\\%s\" %s", m_pathModule.c_str(), commandLocal, parameter);
 
 	// create the child process.   
 	if (!CreateProcessW(NULL, commandLocal, NULL, NULL, TRUE, 0, NULL,

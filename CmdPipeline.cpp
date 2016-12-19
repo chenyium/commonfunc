@@ -53,522 +53,90 @@
  *****************************************************************************/
 namespace pipeline {
 
-namespace vol {
-static const int LEN_CMD       = 512;
-static const int LEN_REASON    = 256;
-static const int LEN_BUFF      = 256;
-static const int LEN_BUFFER    = 1024*4;
-}
+	namespace vol {
+		static const int LEN_CMD       = 512;
+		static const int LEN_REASON    = 256;
+		static const int LEN_BUFF      = 256;
+		static const int LEN_BUFFER    = 1024*4;
+	}
 
-namespace cmd {
-static const wchar_t* ADB_COMMAND       = L"adb -s %s %s";
-static const wchar_t* ADB_DEVICES       = L"adb devices";
-static const wchar_t* ADB_STARTSERVER   = L"adb start-server";
-static const wchar_t* ADB_FORWARD       = L"adb -s %s forward tcp:%d tcp:%d";
-static const wchar_t* ADB_INSTALL       = L"adb -s %s install -r \"%s\"";
-static const wchar_t* ADB_PULL_FILE     = L"adb -s %s pull %s \"%s\"";
-static const wchar_t* ADB_PUSH_FILE     = L"adb -s %s push \"%s\" %s";
-static const wchar_t* ADB_GET_DESC      = L"adb -s %s get-descriptor";
-static const wchar_t* ADB_GET_STATE     = L"adb -s %s get-state";
-static const wchar_t* ADB_USB           = L"adb -s %s usb";
-}
+	namespace cmd {
+		static const wchar_t* ADB_COMMAND       = L"adb -s %s %s";
+		static const wchar_t* ADB_DEVICES       = L"adb devices";
+		static const wchar_t* ADB_STARTSERVER   = L"adb start-server";
+		static const wchar_t* ADB_FORWARD       = L"adb -s %s forward tcp:%d tcp:%d";
+		static const wchar_t* ADB_INSTALL       = L"adb -s %s install -r \"%s\"";
+		static const wchar_t* ADB_PULL_FILE     = L"adb -s %s pull %s \"%s\"";
+		static const wchar_t* ADB_PUSH_FILE     = L"adb -s %s push \"%s\" %s";
+		static const wchar_t* ADB_GET_DESC      = L"adb -s %s get-descriptor";
+		static const wchar_t* ADB_GET_STATE     = L"adb -s %s get-state";
+		static const wchar_t* ADB_USB           = L"adb -s %s usb";
+	}
 
-namespace cmd {
-static const wchar_t* ADB_SHELL_S       = L"adb shell %s";
-static const wchar_t* ADB_SHELL_M       = L"adb -s %s shell %s";
-static const wchar_t* ADB_SHELL_GETPROP = L"adb -s %s shell getprop %s";
-static const wchar_t* ADB_SHELL_SETPROP = L"adb -s %s shell setprop %s %s";
-static const wchar_t* ADB_SHELL_LS      = L"adb -s %s shell ls %s";
-static const wchar_t* ADB_SHELL_PSN     = L"flashcmd 0 getpsn";
-}
+	namespace cmd {
+		static const wchar_t* ADB_SHELL_S       = L"adb shell %s";
+		static const wchar_t* ADB_SHELL_M       = L"adb -s %s shell %s";
+		static const wchar_t* ADB_SHELL_GETPROP = L"adb -s %s shell getprop %s";
+		static const wchar_t* ADB_SHELL_SETPROP = L"adb -s %s shell setprop %s %s";
+		static const wchar_t* ADB_SHELL_LS      = L"adb -s %s shell ls %s";
+		static const wchar_t* ADB_SHELL_PSN     = L"flashcmd 0 getpsn";
+	}
 
-namespace label {
-static const wchar_t* ADB_TOKEN_START   = L"startserver_result";
-static const wchar_t* ADB_TOKEN_SHELL   = L"shell_complete";
-static const wchar_t* ADB_TOKEN_DEVICES = L"devices_result";
-static const wchar_t* ADB_TOKEN_FORWARD = L"forward_result";
-static const wchar_t* ADB_TOKEN_PULL    = L"pull_result";
-static const wchar_t* ADB_TOKEN_PUSH    = L"push_result";
-static const wchar_t* ADB_TOKEN_REBOOT  = L"reboot_result";
-static const wchar_t* ADB_TOKEN_INSTALL = L"install_result";
-static const wchar_t* ADB_TOKEN_DESC    = L"descriptor_result";
-static const wchar_t* ADB_TOKEN_STATE   = L"state_result";
-static const wchar_t* ADB_TOKEN_USB     = L"usb";
-static const wchar_t* ADB_TOKEN_KBS     = L"KB/s";
-static const wchar_t* ADB_TOKEN_OKEY    = L"OKEY";
-static const wchar_t* ADB_TOKEN_ROOT    = L"root@";
-}
+	namespace label {
+		static const wchar_t* ADB_TOKEN_START   = L"startserver_result";
+		static const wchar_t* ADB_TOKEN_SHELL   = L"shell_complete";
+		static const wchar_t* ADB_TOKEN_DEVICES = L"devices_result";
+		static const wchar_t* ADB_TOKEN_FORWARD = L"forward_result";
+		static const wchar_t* ADB_TOKEN_PULL    = L"pull_result";
+		static const wchar_t* ADB_TOKEN_PUSH    = L"push_result";
+		static const wchar_t* ADB_TOKEN_REBOOT  = L"reboot_result";
+		static const wchar_t* ADB_TOKEN_INSTALL = L"install_result";
+		static const wchar_t* ADB_TOKEN_DESC    = L"descriptor_result";
+		static const wchar_t* ADB_TOKEN_STATE   = L"state_result";
+		static const wchar_t* ADB_TOKEN_USB     = L"usb";
+		static const wchar_t* ADB_TOKEN_KBS     = L"KB/s";
+		static const wchar_t* ADB_TOKEN_OKEY    = L"OKEY";
+		static const wchar_t* ADB_TOKEN_ROOT    = L"root@";
+	}
 
-namespace label {
-static const wchar_t* ADB_INSTALL       = L"Success";
-static const wchar_t* ADB_SUCCESS       = L"success";
-static const wchar_t* ADB_FAILURE       = L"failure";
-static const wchar_t* DEVICES_LIST      = L"List of devices attached";
-static const wchar_t* DEVICE_NOT_FOUND  = L"error: device not found";
-static const wchar_t* REBOOT_USB_MODE   = L"restarting in USB mode";
-}
+	namespace label {
+		static const wchar_t* ADB_INSTALL       = L"Success";
+		static const wchar_t* ADB_SUCCESS       = L"success";
+		static const wchar_t* ADB_FAILURE       = L"failure";
+		static const wchar_t* DEVICES_LIST      = L"List of devices attached";
+		static const wchar_t* DEVICE_NOT_FOUND  = L"error: device not found";
+		static const wchar_t* REBOOT_USB_MODE   = L"restarting in USB mode";
+	}
 
-namespace wlan {
-static const wchar_t* ADB_CONNECT          = L"adb connect %s";
-static const wchar_t* ADB_DISCONNECT       = L"adb disconnect %s";
-static const wchar_t* ADB_TOKEN            = L"connected to %s:%d";
-static const wchar_t* ADB_TOKEN_CONNECT    = L"connect_result";
-static const wchar_t* ADB_TOKEN_DISCONNECT = L"disconnect_result";
-static const wchar_t* ADB_STATUS           = L"connected to";
-const int ADB_PORT = 5555;
-}
+	namespace wlan {
+		static const wchar_t* ADB_CONNECT          = L"adb connect %s";
+		static const wchar_t* ADB_DISCONNECT       = L"adb disconnect %s";
+		static const wchar_t* ADB_TOKEN            = L"connected to %s:%d";
+		static const wchar_t* ADB_TOKEN_CONNECT    = L"connect_result";
+		static const wchar_t* ADB_TOKEN_DISCONNECT = L"disconnect_result";
+		static const wchar_t* ADB_STATUS           = L"connected to";
+		const int ADB_PORT = 5555;
+	}
 
-namespace cmd {
-	static const wchar_t* FASTBOOT_COMMAND   = L"fastboot %s";
-	static const wchar_t* FASTBOOT_COMMAND_M = L"fastboot -s \"%s\" %s";
-	static const wchar_t* FASTBOOT_PSN_R     = L"fastboot %s";
-	static const wchar_t* FASTBOOT_PSN_R_M   = L"fastboot -s \"%s\" %s";
-}
+	namespace cmd {
+		static const wchar_t* FASTBOOT_COMMAND   = L"fastboot %s";
+		static const wchar_t* FASTBOOT_COMMAND_M = L"fastboot -s \"%s\" %s";
+	}
 
-namespace label {
-	static const wchar_t* FASTBOOT_TOKEN = L"finished. total time";
-	static const wchar_t* FASTBOOT_PASS  = L"OKAY";
-	static const wchar_t* FASTBOOT_ERROR = L"error: cannot load";
-}
+	namespace label {
+		static const wchar_t* FASTBOOT_TOKEN = L"finished. total time";
+		static const wchar_t* FASTBOOT_PASS  = L"OKAY";
+		static const wchar_t* FASTBOOT_ERROR = L"error: cannot load";
+	}
 
+	namespace cmd {
+		static const wchar_t* FLASHCMD_PREPARE = L"flashcmd %d prepare";
+		static const wchar_t* FLASHCMD_READ    = L"flashcmd %d read";
+		static const wchar_t* FLASHCMD_BURN    = L"flashcmd %d burn";
+	}
 
-namespace cmd {
-	static const wchar_t* FLASHCMD_PREPARE = L"flashcmd %d prepare";
-	static const wchar_t* FLASHCMD_READ    = L"flashcmd %d read";
-	static const wchar_t* FLASHCMD_BURN    = L"flashcmd %d burn";
-}
-
-namespace label {
-	static const wchar_t* FLASHCMD_TOKEN = L"OKAY";
-}
 } using namespace pipeline;
 
-/*!
- * Definitions
- *****************************************************************************/
-#define DELETE_HANDLE(handle) \
-	do { if (NULL != handle) CloseHandle(handle), handle = NULL; } while(0);
-#define DELETE_ARRAY(arr) \
-	do { if (NULL != arr) delete[] arr, arr = NULL; } while(0);
-
-/*!
- * Definitions
- *****************************************************************************/
-#define BUFFER_SIZE    (1024*10)
-
-/*!
- * Class Implement - CCmdPipeline
- *****************************************************************************/
-CCmdPipeline::CCmdPipeline(void) 
-	: m_function(NULL)
-	, m_object(NULL)
-	, m_hInputRead(NULL)
-	, m_hInputWrite(NULL)
-	, m_hOutputRead(NULL)
-	, m_hOutputWrite(NULL)
-	, m_hErrorWrite(NULL)
- 	, m_hProcessCmd(NULL)
-{
-	wchar_t szModule[MAX_PATH] = {0};
-	GetModuleFileNameW(NULL, szModule, MAX_PATH);
-	PathRemoveFileSpecW(szModule);
-	PathAppendW(szModule, L"");
-
-	memset(m_szModule, 0, sizeof(m_szModule));
-	safe_sprintf(m_szModule, L"%s", szModule);
-
-	memset(m_szTokens, 0, sizeof(m_szTokens));
-    memset(m_szErrors, 0, sizeof(m_szErrors));
-}
-
-/*!
- * Function:    
- * Parameters:  
- * Description: 
- * Inputs:      
- * Outputs:     
- * Return:      
- * Remark:      ChenYao Modify. 2013-12-17 16:45. 
- *****************************************************************************/
-CCmdPipeline::~CCmdPipeline(void)
-{
-	// delete handles
-	DELETE_HANDLE(m_hInputRead);
-	DELETE_HANDLE(m_hInputWrite);
-	DELETE_HANDLE(m_hOutputRead);
-	DELETE_HANDLE(m_hOutputWrite);
-	DELETE_HANDLE(m_hErrorWrite);
-
-	AbortProcess();
-}
-
-/*!
- * Function:    InitializePipeline
- * Parameters:  CString&
- * Description: 
- * Inputs:      
- * Outputs:     
- * Return:      
- * Remark:      ChenYao add. 2014-2-27 16:16. 
- *     m_hInputRead   子进程读出数据
- *     m_hInputWrite  主进程写入数据
- *     m_hOutputWrite 子进程写入数据
- *     m_hOutputRead  主进程读出数据
- *****************************************************************************/
-bool CCmdPipeline::Initialize()
-{
-	HANDLE hOutputReadTmp = NULL;
-	HANDLE hInputWriteTmp = NULL;
-
-	// Set the bInheritHandle flag, so pipe handles are inherited. 
-	SECURITY_ATTRIBUTES saAttr;
-	memset(&saAttr, 0, sizeof(SECURITY_ATTRIBUTES));
-	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
-	saAttr.lpSecurityDescriptor = NULL;
-	saAttr.bInheritHandle = TRUE;
-
-	// Create the child output pipe.
-	if (!CreatePipe(&hOutputReadTmp, &m_hOutputWrite, &saAttr, 0)) {
-		safe_sprintf(m_szErrors, L"create stdout pipe failed");
-		return false;
-	}
-
-	// Create the child input pipe.
-	if (!CreatePipe(&m_hInputRead, &hInputWriteTmp, &saAttr, 0)) {
-		safe_sprintf(m_szErrors, L"create stdin pipe failed");
-		return false;
-	}
-
-	// Create a duplicate of the output write handle for the std error write handle. 
-	// This is necessary in case the child application closes one of its std output handles.
-	if (!DuplicateHandle(GetCurrentProcess(), m_hOutputWrite, 
-				GetCurrentProcess(), &m_hErrorWrite, 
-				0, TRUE, DUPLICATE_SAME_ACCESS)) {
-		safe_sprintf(m_szErrors, L"DuplicateHandle Error");
-		return false;
-	}
-
-	// Create new output read handle and the input write handles. Set
-	// the Properties to FALSE. Otherwise, the child inherits the
-	// properties and, as a result, non-closeable handles to the pipes
-	// are created.
-	if (!DuplicateHandle(GetCurrentProcess(), hOutputReadTmp,
-				GetCurrentProcess(), &m_hOutputRead, // Address of new handle.
-				0, FALSE/*Make it uninheritable*/, DUPLICATE_SAME_ACCESS)) {
-		safe_sprintf(m_szErrors, L"DuplicateHandle Error");
-		return false;
-	}
-
-	if (!DuplicateHandle(GetCurrentProcess(), hInputWriteTmp,
-				GetCurrentProcess(), &m_hInputWrite, // Address of new handle.
-				0, FALSE/*Make it uninheritable*/, DUPLICATE_SAME_ACCESS)) {
-		safe_sprintf(m_szErrors, L"DuplicateHandle Error");
-		return false;
-	}
-
-	DELETE_HANDLE(hOutputReadTmp);
-	DELETE_HANDLE(hInputWriteTmp);
-
-	// 设置 OurtputRead 为非阻塞模式
-	DWORD dwMode = PIPE_NOWAIT;
-	if (!SetNamedPipeHandleState(m_hOutputRead, &dwMode, NULL, NULL)) {
-		safe_sprintf(m_szErrors, L"SetNamedPipeHandleState Error");
-		return false;
-	}
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- *****************************************************************************/
-void CCmdPipeline::SetTokenString(const wchar_t *token) 
-{
-	safe_sprintf(m_szTokens, L"%s", token);
-}
-
-/*!
- * author: chenyao
- *
- *****************************************************************************/
-bool CCmdPipeline::CommandExec(const wchar_t *command)
-{
-	// Set up members of the STARTUPINFO structure. 
-	// This structure specifies the STDIN handle for redirection. 
-	STARTUPINFO siStartInfo = {sizeof(STARTUPINFO)}; 
-	siStartInfo.hStdInput   = m_hInputRead;   // 子进程的标准输入HANDLE
-	siStartInfo.hStdOutput  = m_hOutputWrite; // 子进程的标准输出HANDLE
-	siStartInfo.hStdError   = m_hErrorWrite;
-	siStartInfo.dwFlags     = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-	siStartInfo.wShowWindow |= SW_HIDE;
-
-	// Set up members of the PROCESS_INFORMATION structure.  
-	PROCESS_INFORMATION piProcInfo; 
-	ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
-	
-	// Create the child process.   
-	wchar_t szCommand[vol::LEN_CMD] = {};
-    safe_sprintf(szCommand, L"%s", command);
-	if (!CreateProcess(NULL, szCommand,  // command line 
-			NULL,             // process security attributes 
-			NULL,             // primary thread security attributes 
-			TRUE,             // handles are inherited 
-			0,                // creation flags 
-			NULL,             // use parent's environment 
-			m_szModule,       // use parent's current directory 
-			&siStartInfo,     // STARTUPINFO pointer 
-			&piProcInfo))     // receives PROCESS_INFORMATION 
-	{
-        safe_sprintf(m_szErrors, L"create command (%d)", GetLastError());
-		return false;
-	}
-
-    CloseHandle(piProcInfo.hThread), piProcInfo.hThread = NULL;
-	m_hProcessCmd = piProcInfo.hProcess;
-
-	return true;
-}
-
-/*!
- * author: chenyao
- *
- *****************************************************************************/
-bool CCmdPipeline::CommandSend(const wchar_t *command, int cmdlen)
-{
-	unsigned char *pCommand = NULL;
-
-	if (NULL == command || 0 == cmdlen) {
-		safe_sprintf(m_szErrors, _T("command is null"));
-		goto _cleanup;
-	}
-
-	pCommand = new unsigned char[cmdlen+1]();
-
-    int nLength = WideChar2MultiByteHex(command, cmdlen, pCommand, cmdlen+1);
-
-    if (0 >= nLength) {
-		safe_sprintf(m_szErrors, L"WideChar2MultiByteHex failed");
-		goto _cleanup;
-    }
-	
-	DWORD dwWriteLength = 0;
-	if (!WriteFile(m_hInputWrite, pCommand, nLength, &dwWriteLength, NULL)
-            || nLength != (int) dwWriteLength) {
-        safe_sprintf(m_szErrors, L"WriteFile failed (%d)", GetLastError());
-		goto _cleanup;
-	}
-	
-	delete[] pCommand, pCommand = NULL;
-	return true;
-
-_cleanup:
-	if (pCommand)
-		delete[] pCommand, pCommand = NULL;
-	return false;
-}
-
-/*!
- * author: chenyao
- *
- *****************************************************************************/
-int CCmdPipeline::CommandRead(HANDLE removed, int timeout, 
-        wchar_t *result, int reslen)
-{
-    DWORD nCharsRead = 0;
-	DWORD nEndedTime = GetTickCount() + timeout * 1000;
-	
-	do {
-		if (WAIT_OBJECT_0 == WaitForSingleObject(removed, 0)) {
-            safe_sprintf(m_szErrors, L"device removed");
-			goto _cleanup;
-		}
-
-		DWORD dwBytesRead;
-		char  szBufferTmp[1] = {0};
-		PeekNamedPipe(m_hOutputRead, szBufferTmp, 1, &dwBytesRead, NULL, NULL);
-
-        if (0 >= dwBytesRead) {
-            Sleep(100);
-            continue;
-        }
-
-		char  szBuffer[vol::LEN_BUFF] = {0};
-		DWORD nBytesRead = 0;
-
-        while (ReadFile(m_hOutputRead, szBuffer, vol::LEN_BUFF,
-                    &nBytesRead, NULL)) {
-
-            if (0 == nBytesRead) {
-                safe_sprintf(m_szErrors, L"ReadFile failed (%d)", GetLastError());
-                goto _cleanup;
-            }
-
-            wchar_t *pWideCharStr = new wchar_t[nBytesRead + 1]();
-            int nWideChars = MultiByte2WideCharHex((unsigned char*) szBuffer, nBytesRead, 
-                    pWideCharStr, nBytesRead+1);
-            if (0 >= nWideChars) {
-                safe_sprintf(m_szErrors, L"MultiByte2WideCharHex (%d)", GetLastError());
-                delete[] pWideCharStr, pWideCharStr = NULL;
-                goto _cleanup;
-            }
-
-            if ((int) nCharsRead + nWideChars >= reslen) {
-                safe_sprintf(m_szErrors, L"buffer is small");
-                delete[] pWideCharStr, pWideCharStr = NULL;
-                goto _cleanup;
-            }
-
-            wmemcpy_s(result + nCharsRead, reslen - nCharsRead, 
-                    pWideCharStr, nWideChars);
-            delete[] pWideCharStr, pWideCharStr = NULL;
-
-            nCharsRead += nWideChars;
-            memset(szBuffer, 0, sizeof(szBuffer));
-            nBytesRead = 0;
-		}
-
-		if (NULL != wcsstr(result, label::FASTBOOT_ERROR)) {
-			safe_sprintf(m_szErrors, label::FASTBOOT_ERROR);
-			goto _cleanup;
-		}
-
-		if (NULL != wcsstr(result, m_szTokens)) {
-			return nCharsRead; // pass
-		}
-
-		Sleep(10);
-	} while (GetTickCount() <= nEndedTime);
-
-    safe_sprintf(m_szErrors, L"timeout");
-
-_cleanup:
-	AbortProcess();
-	return -1; // fail
-}
-
-void CCmdPipeline::AbortProcess()
-{
-	if (NULL != m_hProcessCmd) {
-		TerminateProcess(m_hProcessCmd, 0);
-		CloseHandle(m_hProcessCmd), m_hProcessCmd = NULL;
-	}
-}
-
-void CCmdPipeline::CleanProcess()
-{
-	if (NULL != m_hProcessCmd) {
-		WaitForSingleObject(m_hProcessCmd, INFINITE);
-		TerminateProcess(m_hProcessCmd, 0);
-		CloseHandle(m_hProcessCmd), m_hProcessCmd = NULL;
-	}
-}
-
-/*!
- * author: chenyao
- * fastboot
- ******************************************************************************/
-bool CCmdPipeline::AnalysisFastbootResult(wchar_t *result, int reslen,
-        const wchar_t *token, bool check)
-{
-    wchar_t *pEndding = NULL;
-
-    pEndding = wcsstr(result, token);
-	if (NULL == pEndding) {
-        safe_sprintf(result, reslen, L"endding is missing");
-		return false;
-    }
-
-    if (false == check) {
-        *pEndding = 0, stringtrimw(result);
-        return true;
-    }
-
-	pEndding = wcsstr(result, label::FASTBOOT_PASS);
-	if (NULL == pEndding) {
-        safe_sprintf(result, reslen, L"endding is failure");
-		return false;
-	}
-
-	*pEndding = 0, stringtrimw(result);
-	return true;
-}
-
-bool CCmdPipeline::ExecuteFastbootCommand(HANDLE removed, int timeout, const wchar_t *command, 
-            const wchar_t *token, wchar_t *result, int reslen)
-{	
-	if (NULL == command) {
-		safe_sprintf(m_szErrors, L"command is null");
-		return false;
-	}
-
-	if (false == CommandExec(command)) {
-		safe_overwrite(m_szErrors, L"send:%s", m_szErrors);
-		return false;
-	}
-
-    wchar_t szResult[vol::LEN_BUFFER] = {0};
-
-	SetTokenString(token);
-	int nResultLen = CommandRead(removed, timeout, 
-			szResult, _countof(szResult));
-    log_trace(szResult);
-	CleanProcess();
-
-	if (0 >= nResultLen) {
-		safe_overwrite(m_szErrors, L"read:%s", m_szErrors);
-		return false;
-	}
-
-	if (NULL != result && 0 != reslen)
-		safe_sprintf(result, reslen, L"%s", stringtrimw(szResult));
-
-	return true;
-}
-
-bool CCmdPipeline::ExecuteFastboot(HANDLE removed, int timeout,
-			const TCHAR *command, TCHAR *result, int reslen, bool check)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::FASTBOOT_COMMAND, command);
-	log_trace(szCommand);
-
-	if (!ExecuteFastbootCommand(removed, timeout, 
-				szCommand, label::FASTBOOT_TOKEN, result, reslen)) {
-		return false;
-	}
-
-	if (!AnalysisFastbootResult(result, reslen, 
-				label::FASTBOOT_TOKEN, check)) {
-		safe_sprintf(m_szErrors, result);
-		return false;
-	}
-
-	return true;
-}
-
-bool CCmdPipeline::ExecuteFastboot(HANDLE removed, int timeout, const TCHAR *serial, 
-			const TCHAR *command, TCHAR *result, int reslen, bool check)
-{
-	TCHAR szCommand[vol::LEN_CMD] = {0};
-
-	safe_sprintf(szCommand, cmd::FASTBOOT_COMMAND_M, serial, command);
-	log_trace(szCommand);
-
-	if (!ExecuteFastbootCommand(removed, timeout, 
-				szCommand, label::FASTBOOT_TOKEN, result, reslen)) {
-		return false;
-	}
-
-	if (!AnalysisFastbootResult(result, reslen, 
-				label::FASTBOOT_TOKEN, check)) {
-		safe_sprintf(m_szErrors, result);
-		return false;
-	}
-
-	return true;
-}
 
 CPipeline::CPipeline()
 	: m_pathModule  (L"")
@@ -661,6 +229,9 @@ void CPipeline::Release()
 	CloseHandle(m_errorWrite),  m_errorWrite  = nullptr;
 
 	SetRouterFunc(nullptr, nullptr);
+
+	memset(m_errormsg, 0, sizeof(m_errormsg));
+	m_pathModule.clear();
 }
 
 static wchar_t * SegmentCommand(wchar_t * path)
@@ -1597,5 +1168,91 @@ bool CShellAdb::ExecuteWlanDisconnect(int timeout_ms)
 		return false;
 	}
 
+	return true;
+}
+
+//! fastboot
+
+bool CShellFastboot::ExecuteShell(const wchar_t *command, int timeout_ms, const wchar_t *token,  
+		bool check, wchar_t *result, int reslen)
+{
+	if (nullptr == command || 0 == wcslen(command)) {
+		safe_sprintf(m_errormsg, L"command is null");
+		return false;
+	}
+
+	if (false == CommandExec(command)) {
+		safe_overwrite(m_errormsg, L"send:%s", m_errormsg);
+		return false;
+	}
+
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	int resultLen = CommandRead(timeout_ms, resultLocal, _countof(resultLocal));
+    log_trace(resultLocal);
+
+	if (0 >= resultLen) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
+		return false;
+	}
+
+	if (false == AnalysisResult(resultLocal, token, check))
+		return false;
+
+	if (nullptr != result && 0 != reslen)
+		safe_sprintf(result, reslen, L"%s", stringtrimw(resultLocal));
+
+	return true;
+}
+
+bool CShellFastboot::AnalysisResult(wchar_t *result, const wchar_t *token, bool check)
+{
+	// cannot load 
+	if (nullptr != wcsstr(result, label::FASTBOOT_ERROR)) {
+		safe_sprintf(m_errormsg, L"cannot load image");
+		return false;
+	}
+
+    wchar_t * endding = nullptr;
+
+    endding = wcsstr(result, token);
+
+	if (nullptr == endding) {
+        safe_sprintf(m_errormsg, L"endding is missing");
+		return false;
+    }
+
+    if (true == check) {
+		endding = wcsstr(result, label::FASTBOOT_PASS);
+
+		if (nullptr == endding) {
+			safe_sprintf(m_errormsg, L"endding is failure");
+			return false;
+		}
+	}
+
+	*endding = L'\0';
+	stringtrimw(result);
+
+	return true;
+}
+
+bool CShellFastboot::ExecuteCommand(const wchar_t *command, int timeout_ms, bool check,
+		wchar_t *result, int reslen)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	if (m_serial.empty())
+		safe_sprintf(commandLocal, cmd::FASTBOOT_COMMAND, command);
+	else 
+		safe_sprintf(commandLocal, cmd::FASTBOOT_COMMAND_M, m_serial.c_str(), command);
+
+	log_trace(commandLocal);
+
+	if (!ExecuteShell(commandLocal, timeout_ms, 
+				label::FASTBOOT_TOKEN, check, result, reslen)) {
+		return false;
+	}
+	
 	return true;
 }

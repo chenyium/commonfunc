@@ -30,39 +30,11 @@
  *
  *
  *****************************************************************************/
-#pragma once
-
 #include <Windows.h>
-#include <string>
+#include "common_unit.h"
 
-//! automatic delete array point
-/*! \author chenyao
- */
-template <typename type> class CArrayPoint
-{
-public:
-	explicit CArrayPoint(int size) {
-		m_capacity = size;
-		m_point = new type[size]();
-	}
-	~CArrayPoint() {
-		delete[] m_point, m_point = nullptr;
-	}
-
-private:
-	CArrayPoint(CArrayPoint&);
-	CArrayPoint& operator =(CArrayPoint&);
-
-public:
-	operator type*() const { return m_point; }
-
-public:
-	inline int capacity() { return m_capacity; }
-	
-private:
-	type * m_point;
-	int m_capacity;
-};
+#ifndef __CMD_PIPELINE_H__
+#define __CMD_PIPELINE_H__
 
 //! pipeline
 class CPipeline 
@@ -210,3 +182,5 @@ public:
 	bool ExecuteCommand(const wchar_t *command, int timeout_ms,
             bool check = true, wchar_t *result = nullptr, int reslen = 0);
 };
+
+#endif

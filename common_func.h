@@ -97,6 +97,9 @@ bool     stringissamew(const wchar_t *str1, const wchar_t *str2);
 bool     stringcontaina(const char *src, const char *sub);
 bool     stringcontainw(const wchar_t *src, const wchar_t *sub);
 
+char    * stringdeletea(char * source, char * del);
+wchar_t * stringdeletew(wchar_t * source, wchar_t * del);
+
 //! Wide char change to multi byte
 /*!
     \ingroup common_func

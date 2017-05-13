@@ -263,6 +263,46 @@ bool stringcontainw(const wchar_t *src, const wchar_t *sub)
 	return NULL == wcsstr(src, sub) ? false : true;
 }
 
+char * stringdeletea(char * source, char * del)
+{
+	if (NULL == source || NULL == del)
+		return source;
+
+	for (char * index = del; !IS_END(*index); index++) {
+		char *head, *tail;
+
+		for (head = tail = source; !IS_END(*head); head++) {
+			if (*head != *index) {
+				*tail++ = *head;
+			}
+		}
+
+		*tail = '\0';
+	}
+
+	return source;
+}
+
+wchar_t * stringdeletew(wchar_t * source, wchar_t * del)
+{
+	if (NULL == source || NULL == del)
+		return source;
+
+	for (wchar_t * index = del; !IS_END(*index); index++) {
+		wchar_t *head, *tail;
+
+		for (head = tail = source; !IS_END(*head); head++) {
+			if (*head != *index) {
+				*tail++ = *head;
+			}
+		}
+
+		*tail = L'\0';
+	}
+
+	return source;
+}
+
 /*!
  * author: chenyao
  ******************************************************************************/

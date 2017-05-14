@@ -207,13 +207,13 @@ wchar_t* stringtrimw(wchar_t *str)
 
 bool stringiszeroa(char *str) 
 {
-	if (NULL == str) return false;
+	if (NULL == str) return true;
 	return !!IS_END(*str);
 }
 
 bool stringiszerow(wchar_t *str) 
 {
-	if (NULL == str) return false;
+	if (NULL == str) return true;
 	return !!IS_END(*str);
 }
 

@@ -140,6 +140,7 @@ namespace pipeline {
 
 CPipeline::CPipeline()
 	: m_pathModule  (L"")
+	, m_pathCurrent (L"")
 	, m_process     (nullptr)
 	, m_removed     (nullptr)
 	, m_inputRead   (nullptr)
@@ -149,6 +150,8 @@ CPipeline::CPipeline()
 	, m_errorWrite  (nullptr)
 	, m_function    (nullptr)
 	, m_object      (nullptr)
+	, m_callbackFunction(nullptr)
+	, m_callbackHandle  (nullptr)
 {
 	memset(m_errormsg, 0, sizeof(m_errormsg));
 }
@@ -232,6 +235,7 @@ void CPipeline::Release()
 
 	memset(m_errormsg, 0, sizeof(m_errormsg));
 	m_pathModule.clear();
+	m_pathCurrent.clear();
 }
 
 static wchar_t * SegmentCommand(wchar_t * path)
@@ -274,7 +278,7 @@ bool CPipeline::CommandExec(const wchar_t *command)
 
 	// create the child process.   
 	if (!CreateProcessW(NULL, commandLocal, NULL, NULL, TRUE, 0, NULL,
-				m_pathModule.empty() ? NULL : m_pathModule.c_str(), 
+				m_pathCurrent.empty() ? NULL : m_pathCurrent.c_str(), 
 				&startupInfo, &processInfo)) {
         safe_sprintf(m_errormsg, L"create command (%d)", GetLastError());
 		return false;
@@ -341,7 +345,7 @@ int CPipeline::CommandRead(int timeout_ms, wchar_t *result, int reslen)
 			ProcessClose();
 			break;
 		default:
-			safe_sprintf(m_errormsg, L"read timeout or failed");
+			safe_sprintf(m_errormsg, L"timeout or failed");
 			goto _cleanup;
 		}
 	}
@@ -444,6 +448,92 @@ int CPipeline::CommandRead(const wchar_t *token, int timeout_ms, wchar_t *result
 	} while (GetTickCount() <= endedTime);
 
 	safe_sprintf(m_errormsg, L"read timeout");
+
+_cleanup:
+	ProcessAbort();
+	return -1; // fail
+}
+
+int CPipeline::CommandRead(int timeout_ms, const char * single)
+{
+	if (nullptr == m_process) {
+		safe_sprintf(m_errormsg, L"process is null");
+		return -1;
+	}
+
+	bool termination = false;
+	unsigned long endedTime = GetTickCount() + timeout_ms;
+
+	do {
+		HANDLE handleArray[2] = { m_removed, m_process };
+		DWORD returns = WaitForMultipleObjects(_countof(handleArray), handleArray, FALSE, 10);
+		switch (returns) {
+			case WAIT_OBJECT_0:
+				safe_sprintf(m_errormsg, L"device removed");
+				goto _cleanup;
+			case WAIT_OBJECT_0 + 1:
+				termination = true;
+				break;
+			case WAIT_TIMEOUT: 
+				break;
+			default:
+				safe_sprintf(m_errormsg, L"failed to wait for objects (%d)", GetLastError());
+				goto _cleanup;
+		}
+
+		unsigned long bytesRead = 0;
+		unsigned char buffer[vol::LEN_BUFFER] = {0};
+
+		while (PeekNamedPipe(m_outputRead, buffer, sizeof(buffer), &bytesRead, NULL, NULL) 
+					&& 0 < bytesRead) {
+			if (WAIT_OBJECT_0 == WaitForSingleObject(m_removed, 0)) {
+				safe_sprintf(m_errormsg, L"device removed");
+				goto _cleanup;
+			}
+
+			if (single) {
+				if (NULL == strstr((char *) buffer, single))
+					continue;
+				bytesRead = (unsigned char *) strstr((char *)buffer, single) - buffer + strlen(single);
+			}
+
+			memset(buffer, 0, sizeof(buffer));
+			if (false == ReadFile(m_outputRead, buffer, bytesRead, &bytesRead, NULL)
+					|| 0 == bytesRead) {
+				safe_sprintf(m_errormsg, L"ReadFile failed (%d)", GetLastError());
+				goto _cleanup;
+			}
+
+			CArrayPoint<wchar_t> bufferArray(bytesRead + 1);
+
+			int wideChars = MultiByte2WideCharHex(buffer, bytesRead, 
+					bufferArray, bufferArray.capacity());
+
+			if (0 >= wideChars) {
+				safe_sprintf(m_errormsg, L"MultiByte2WideCharHex (%d)", GetLastError());
+				goto _cleanup;
+			}
+
+			if (m_callbackFunction)
+				m_callbackFunction(m_callbackHandle, bufferArray, wideChars);
+
+			memset(buffer, 0, sizeof(buffer));
+			bytesRead = 0;
+		}
+
+		if (termination) { 
+			unsigned long returnCode = 0;
+			GetExitCodeProcess(m_process, &returnCode);
+			ProcessClose(); 
+			if (0 != returnCode) {
+				safe_sprintf(m_errormsg, L"process return failure (%d)", returnCode);
+				return -1;
+			}
+			return 0; 
+		}
+	} while (GetTickCount() <= endedTime);
+
+	safe_sprintf(m_errormsg, L"operate timeout");
 
 _cleanup:
 	ProcessAbort();
@@ -1254,5 +1344,98 @@ bool CShellFastboot::ExecuteCommand(const wchar_t *command, int timeout_ms, bool
 		return false;
 	}
 	
+	return true;
+}
+
+//! qualcomm
+
+namespace qualcomm {
+	const wchar_t * SAHARA_COMPLETED = L"Sahara protocol completed";
+
+} using namespace qualcomm;
+
+const wchar_t * CShellQualcomm::PROCESS_SAHARA   = L"QSaharaServer.exe";
+const wchar_t * CShellQualcomm::PROCESS_FHLOADER = L"fh_loader.exe";
+
+bool CShellQualcomm::ExecuteShell(const wchar_t *command, int timeout_ms, const wchar_t *token,  
+		bool check, wchar_t *result, int reslen)
+{
+	if (nullptr == command || 0 == wcslen(command)) {
+		safe_sprintf(m_errormsg, L"command is null");
+		return false;
+	}
+
+	if (false == CommandExec(command)) {
+		safe_overwrite(m_errormsg, L"send:%s", m_errormsg);
+		return false;
+	}
+
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	int resultLen = CommandRead(timeout_ms, resultLocal, _countof(resultLocal));
+    log_trace(resultLocal);
+
+	if (0 >= resultLen) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
+		return false;
+	}
+
+	if (false == AnalysisResult(resultLocal, token, check))
+		return false;
+
+	if (nullptr != result && 0 != reslen)
+		safe_sprintf(result, reslen, L"%s", stringtrimw(resultLocal));
+
+	return true;
+}
+
+bool CShellQualcomm::AnalysisResult(wchar_t *result, const wchar_t *token, bool check)
+{
+	if (false == check)
+		return true;
+
+	if (nullptr == wcsstr(result, token)) {
+		safe_sprintf(m_errormsg, L"cannot find token");
+		return false;
+	}
+
+	return true;
+}
+
+bool CShellQualcomm::ExecuteSahara(const wchar_t * command, int timeout_ms,
+		wchar_t * result, int reslen)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandLocal, L"%s -p \\\\.\\COM%s %s", 
+			CShellQualcomm::PROCESS_SAHARA, m_serial.c_str(), command);
+	log_trace(commandLocal);
+
+	return ExecuteShell(commandLocal, timeout_ms, SAHARA_COMPLETED, true, result, reslen);
+}
+
+bool CShellQualcomm::ExecuteFirehose(const wchar_t * command, int timeout_ms)
+{
+	wchar_t commandLocal[vol::LEN_CMD] = {0};
+
+	if (nullptr == command || 0 == wcslen(command)) {
+		safe_sprintf(m_errormsg, L"command is null");
+		return false;
+	}
+
+	safe_sprintf(commandLocal, L"%s --port=\\\\.\\COM%s %s", 
+			CShellQualcomm::PROCESS_FHLOADER, m_serial.c_str(), command);
+	log_trace(commandLocal);
+
+	if (false == CommandExec(commandLocal)) {
+		safe_overwrite(m_errormsg, L"send:%s", m_errormsg);
+		return false;
+	}
+
+	if (0 > CommandRead(timeout_ms, "\n")) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
+		return false;
+	}
+
 	return true;
 }

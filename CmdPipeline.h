@@ -52,7 +52,8 @@ public:
 	void Release();
 
 public:
-	inline void SetPathModule(const wchar_t * path) { m_pathModule = path; }
+	inline void SetPathCurrent(const wchar_t * path) { m_pathCurrent = path; }
+	inline void SetPathModule (const wchar_t * path) { m_pathModule  = path; }
 	inline void SetHandleRemoved(HANDLE handle) { m_removed = handle; }
 
 public:
@@ -65,6 +66,7 @@ public:
 protected:
 	bool CommandExec(const wchar_t *command);
 	bool CommandSend(const wchar_t *command, int cmdlen);
+	int  CommandRead(int timeout_ms, const char * signle);
     int  CommandRead(int timeout_ms, wchar_t *result, int reslen);
     int  CommandRead(const wchar_t *token, int timeout_ms, wchar_t *result, int reslen);
 
@@ -74,28 +76,38 @@ protected:
 	void ProcessClose();
 
 public:
-	inline void SetRouterFunc(void *object, void *func) { 
+	inline void SetRouterFunc(void * object, void * func) { 
 		m_object   = object;
 		m_function = static_cast<PROUTERMESSAGE>(func); 
 	}
-	inline void log_trace(wchar_t *message) {
+	inline void log_trace(wchar_t * message) {
 		if (m_function) 
 			m_function(m_object, message); 
+	}
+	inline void SetCallback(void * object, void * func) { 
+		m_callbackHandle   = object;
+		m_callbackFunction = static_cast<PCALLBACKMESSAGE>(func); 
 	}
 
 public:
     const wchar_t* ErrorMessage() { return m_errormsg; }
 
 private:
-	typedef void (*PROUTERMESSAGE)(void*, wchar_t*);
+	typedef void (*PROUTERMESSAGE)(void *, wchar_t *);
 	PROUTERMESSAGE m_function;
 	void * m_object;
+
+private:
+	typedef void (*PCALLBACKMESSAGE)(void *, wchar_t *, unsigned int);
+	PCALLBACKMESSAGE m_callbackFunction;
+	void * m_callbackHandle;
 
 protected:
 	wchar_t m_errormsg[256];
 
 private:
 	std::wstring m_pathModule;
+	std::wstring m_pathCurrent;
 
 private:
 	HANDLE m_process;
@@ -181,6 +193,25 @@ protected:
 public:
 	bool ExecuteCommand(const wchar_t *command, int timeout_ms,
             bool check = true, wchar_t *result = nullptr, int reslen = 0);
+};
+
+//! qualcomm shell
+
+class CShellQualcomm : public CShellContext, public CPipeline
+{
+protected:
+	virtual bool ExecuteShell(const wchar_t *command, int timeout_ms, const wchar_t *token,  
+			bool check = true, wchar_t *result = nullptr, int reslen = 0);
+	virtual bool AnalysisResult(wchar_t *result, const wchar_t *token, bool check = true);
+	
+public:
+	bool ExecuteSahara(const wchar_t * command, int timeout_ms,
+            wchar_t * result = nullptr, int reslen = 0);
+	bool ExecuteFirehose(const wchar_t * command, int timeout_ms);
+
+private:
+	static const wchar_t * PROCESS_SAHARA;
+	static const wchar_t * PROCESS_FHLOADER;
 };
 
 #endif

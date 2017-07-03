@@ -1,5 +1,6 @@
 #include <string>
 #include <vector>
+#include <queue>
 
 #ifndef __COMMON_UNIT_H__
 #define __COMMON_UNIT_H__
@@ -83,5 +84,61 @@ private:
 	std::string m_origin;
 	std::string m_delimit;
 };
+
+template <typename T> class CResolveArrayTL 
+{
+public:
+	CResolveArrayTL(const T * _origin, int length, const T * _delimit) 
+			: m_origin(length + 1), m_delimit(_delimit) {
+		memcpy_s(m_origin, sizeof(T) * m_origin.capacity(), _origin, sizeof(T) * (length));
+	}
+
+	void invoke() {}
+	const T * next() { return obtain(); }
+
+private:
+	const T * obtain() {
+		if (m_queue.empty()) 
+			return static_cast<T *>(0);
+		const T * temp = m_queue.front(); m_queue.pop();
+		return temp;
+	}
+
+private:
+	std::queue<T *> m_queue;
+	const T * m_delimit;
+	CArrayPoint<T> m_origin;
+};
+
+void CResolveArrayTL<wchar_t>::invoke() {
+	wchar_t * state = NULL;
+	wchar_t * token = wcstok_s(m_origin, m_delimit, &state);
+	while (token) {
+		m_queue.push(token);
+		token = wcstok_s(NULL, m_delimit, &state);
+	}
+}
+
+void CResolveArrayTL<char>::invoke() {
+	char * state = NULL;
+	char * token = strtok_s(m_origin, m_delimit, &state);
+	while (token) {
+		m_queue.push(token);
+		token = strtok_s(NULL, m_delimit, &state);
+	}
+}
+
+#pragma warning (push)
+#pragma warning (disable:4706)
+const wchar_t * CResolveArrayTL<wchar_t>::next() {
+	const wchar_t * temp;
+	return (temp = obtain()) ? temp : L"";
+}
+
+const char * CResolveArrayTL<char>::next() {
+	const char * temp;
+	return (temp = obtain()) ? temp : "";
+}
+#pragma warning (pop)
 
 #endif

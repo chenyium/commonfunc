@@ -141,4 +141,35 @@ const char * CResolveArrayTL<char>::next() {
 }
 #pragma warning (pop)
 
+template <typename T> class CSingleton 
+{
+protected:
+	CSingleton() {}
+	virtual ~CSingleton() {}
+
+private:
+	CSingleton(CSingleton &);
+	CSingleton & operator=(const CSingleton &);
+
+protected:
+	class CGarbo {
+	public:
+		~CGarbo() { if (CSingleton::m_instance) delete CSingleton::m_instance; }
+	};
+	static CGarbo m_garbo;
+
+private:
+	static T * m_instance;
+
+public:
+	static T * Instance() {
+		// create T instance. m_garbo must be here
+		if (nullptr == m_instance) { m_instance = new T; } 
+		m_garbo.CGarbo::CGarbo();
+		return m_instance;
+	}
+};
+template <typename T> T * CSingleton<T>::m_instance = nullptr;
+template <typename T> typename CSingleton<T>::CGarbo CSingleton<T>::m_garbo;
+
 #endif

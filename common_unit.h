@@ -95,11 +95,11 @@ public:
 
 	void invoke() {}
 	const T * next() { return obtain(); }
+	bool hasNext() { return !m_queue.empty(); }
 
 private:
 	const T * obtain() {
-		if (m_queue.empty()) 
-			return static_cast<T *>(0);
+		if (m_queue.empty()) return static_cast<T *>(0);
 		const T * temp = m_queue.front(); m_queue.pop();
 		return temp;
 	}

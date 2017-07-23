@@ -76,31 +76,28 @@ protected:
 	void ProcessClose();
 
 public:
-	inline void SetRouterFunc(void * object, void * func) { 
-		m_object   = object;
-		m_function = static_cast<PROUTERMESSAGE>(func); 
+	inline void SetCallbackMessage(void * object, void * func) { 
+		m_handleMessage = object;
+		m_callbackMessage = static_cast<PCALLBACKMESSAGE>(func); 
+	}
+	inline void SetCallbackProcess(void * object, void * func) { 
+		m_handleProcess = object;
+		m_callbackProcess = static_cast<PCALLBACKPROCESS>(func); 
 	}
 	inline void log_trace(wchar_t * message) {
-		if (m_function) 
-			m_function(m_object, message); 
-	}
-	inline void SetCallback(void * object, void * func) { 
-		m_callbackHandle   = object;
-		m_callbackFunction = static_cast<PCALLBACKMESSAGE>(func); 
+		if (m_callbackMessage) m_callbackMessage(m_handleMessage, message); 
 	}
 
 public:
     const wchar_t* ErrorMessage() { return m_errormsg; }
 
 private:
-	typedef void (*PROUTERMESSAGE)(void *, wchar_t *);
-	PROUTERMESSAGE m_function;
-	void * m_object;
-
-private:
-	typedef void (*PCALLBACKMESSAGE)(void *, wchar_t *, unsigned int);
-	PCALLBACKMESSAGE m_callbackFunction;
-	void * m_callbackHandle;
+	typedef void (_stdcall * PCALLBACKMESSAGE)(void *, wchar_t *);
+	typedef void (_stdcall * PCALLBACKPROCESS)(void *, wchar_t *, unsigned int);
+	void * m_handleMessage;
+	void * m_handleProcess;
+	PCALLBACKMESSAGE m_callbackMessage;
+	PCALLBACKPROCESS m_callbackProcess;
 
 protected:
 	wchar_t m_errormsg[256];

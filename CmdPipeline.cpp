@@ -148,10 +148,10 @@ CPipeline::CPipeline()
 	, m_outputRead  (nullptr)
 	, m_outputWrite (nullptr)
 	, m_errorWrite  (nullptr)
-	, m_function    (nullptr)
-	, m_object      (nullptr)
-	, m_callbackFunction(nullptr)
-	, m_callbackHandle  (nullptr)
+	, m_handleProcess  (nullptr)
+	, m_handleMessage  (nullptr)
+	, m_callbackProcess(nullptr)
+	, m_callbackMessage(nullptr)
 {
 	memset(m_errormsg, 0, sizeof(m_errormsg));
 }
@@ -231,7 +231,8 @@ void CPipeline::Release()
 	CloseHandle(m_outputWrite), m_outputWrite = nullptr;
 	CloseHandle(m_errorWrite),  m_errorWrite  = nullptr;
 
-	SetRouterFunc(nullptr, nullptr);
+	SetCallbackMessage(nullptr, nullptr);
+	SetCallbackProcess(nullptr, nullptr);
 
 	memset(m_errormsg, 0, sizeof(m_errormsg));
 	m_pathModule.clear();
@@ -514,8 +515,8 @@ int CPipeline::CommandRead(int timeout_ms, const char * single)
 				goto _cleanup;
 			}
 
-			if (m_callbackFunction)
-				m_callbackFunction(m_callbackHandle, bufferArray, wideChars);
+			if (m_callbackProcess)
+				m_callbackProcess(m_handleProcess, bufferArray, wideChars);
 
 			memset(buffer, 0, sizeof(buffer));
 			bytesRead = 0;

@@ -306,7 +306,6 @@ wchar_t * stringdeletew(wchar_t * source, wchar_t * del)
 /*!
  * author: chenyao
  ******************************************************************************/
-#include <windows.h>
 int WideChar2MultiByte(const wchar_t* lpWideCharStr, 
         char* lpMultiByteStr, int cbMultiByte)
 {

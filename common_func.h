@@ -146,4 +146,26 @@ wchar_t* CalculateImeiDigitW(wchar_t* imei);
 void _cdecl OutputDebugFormat(const char *prefix, const char *format, ...);
 void _cdecl OutputDebugFormat(const wchar_t *prefix, const wchar_t *format, ...);
 
+#include <windows.h>
+
+class CCriticalCreate {
+public:
+	CCriticalCreate(CRITICAL_SECTION * _critical) { 
+		critical = _critical; InitializeCriticalSection(_critical); 
+	}
+	~CCriticalCreate() { DeleteCriticalSection(critical); }
+private:
+	CRITICAL_SECTION * critical;
+};
+
+class CCriticalCustom {
+public:
+	CCriticalCustom(CRITICAL_SECTION * _critical) {
+		critical = _critical; EnterCriticalSection(critical); 
+	}
+	~CCriticalCustom() { LeaveCriticalSection(critical); }
+private:
+	CRITICAL_SECTION * critical;
+};
+
 #endif  _COMMON_FUNC_H_

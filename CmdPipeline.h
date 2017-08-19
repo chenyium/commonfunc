@@ -171,7 +171,7 @@ public:
 	bool ExecuteFlashcmdBase(const wchar_t *command, int timeout_ms, 
 			wchar_t *result, int reslen);
 	bool ExecuteFlashcmdPrep(int timeout_ms, int slot, wchar_t *result, int reslen);
-	bool ExecuteFlashcmdBurn(int slot);
+	bool ExecuteFlashcmdBurn(int slot, const wchar_t * token);
 	bool ExecuteFlashcmdRead(int timeout_ms, int slot, wchar_t *result, int reslen);
 
 public:

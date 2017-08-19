@@ -1151,7 +1151,7 @@ bool CShellAdb::ExecuteFlashcmdPrep(int timeout_ms, int slot, wchar_t *result, i
 	return ExecuteFlashcmdBase(commandLocal, timeout_ms, result, reslen);
 }
 
-bool CShellAdb::ExecuteFlashcmdBurn(int slot)
+bool CShellAdb::ExecuteFlashcmdBurn(int slot, const wchar_t * token)
 {
 	wchar_t commandLocal[vol::LEN_CMD] = {0};
 
@@ -1167,7 +1167,7 @@ bool CShellAdb::ExecuteFlashcmdBurn(int slot)
 
 	wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	int resultLen = CommandRead(label::ADB_TOKEN_ROOT, 5000, 
+	int resultLen = CommandRead(nullptr == token ? label::ADB_TOKEN_ROOT : token, 5000, 
 			resultLocal, _countof(resultLocal));
 	log_trace(resultLocal);
 

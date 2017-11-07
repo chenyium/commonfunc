@@ -66,7 +66,7 @@ public:
 protected:
 	bool CommandExec(const wchar_t *command);
 	bool CommandSend(const wchar_t *command, int cmdlen);
-	int  CommandRead(int timeout_ms, const char * signle);
+	int  CommandRead(int timeout_ms, const wchar_t * signle);
     int  CommandRead(int timeout_ms, wchar_t *result, int reslen);
     int  CommandRead(const wchar_t *token, int timeout_ms, wchar_t *result, int reslen);
 
@@ -93,7 +93,7 @@ public:
 
 private:
 	typedef void (_stdcall * PCALLBACKMESSAGE)(void *, wchar_t *);
-	typedef void (_stdcall * PCALLBACKPROCESS)(void *, wchar_t *, unsigned int);
+	typedef void (_stdcall * PCALLBACKPROCESS)(void *, const wchar_t *, unsigned int);
 	void * m_handleMessage;
 	void * m_handleProcess;
 	PCALLBACKMESSAGE m_callbackMessage;

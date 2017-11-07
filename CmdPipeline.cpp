@@ -455,7 +455,7 @@ _cleanup:
 	return -1; // fail
 }
 
-int CPipeline::CommandRead(int timeout_ms, const char * single)
+int CPipeline::CommandRead(int timeout_ms, const wchar_t * single)
 {
 	if (nullptr == m_process) {
 		safe_sprintf(m_errormsg, L"process is null");
@@ -464,6 +464,7 @@ int CPipeline::CommandRead(int timeout_ms, const char * single)
 
 	bool termination = false;
 	unsigned long endedTime = GetTickCount() + timeout_ms;
+	std::wstring valueTotal = L"";
 
 	do {
 		HANDLE handleArray[2] = { m_removed, m_process };
@@ -472,30 +473,21 @@ int CPipeline::CommandRead(int timeout_ms, const char * single)
 			case WAIT_OBJECT_0:
 				safe_sprintf(m_errormsg, L"device removed");
 				goto _cleanup;
-			case WAIT_OBJECT_0 + 1:
-				termination = true;
-				break;
-			case WAIT_TIMEOUT: 
-				break;
+			case WAIT_OBJECT_0 + 1: termination = true; break;
+			case WAIT_TIMEOUT: break;
 			default:
 				safe_sprintf(m_errormsg, L"failed to wait for objects (%d)", GetLastError());
 				goto _cleanup;
 		}
 
 		unsigned long bytesRead = 0;
-		unsigned char buffer[vol::LEN_BUFFER] = {0};
+		unsigned char buffer[vol::LEN_BUFF] = {0};
 
 		while (PeekNamedPipe(m_outputRead, buffer, sizeof(buffer), &bytesRead, NULL, NULL) 
 					&& 0 < bytesRead) {
 			if (WAIT_OBJECT_0 == WaitForSingleObject(m_removed, 0)) {
 				safe_sprintf(m_errormsg, L"device removed");
 				goto _cleanup;
-			}
-
-			if (single) {
-				if (NULL == strstr((char *) buffer, single))
-					continue;
-				bytesRead = (unsigned char *) strstr((char *)buffer, single) - buffer + strlen(single);
 			}
 
 			memset(buffer, 0, sizeof(buffer));
@@ -515,22 +507,41 @@ int CPipeline::CommandRead(int timeout_ms, const char * single)
 				goto _cleanup;
 			}
 
-			if (m_callbackProcess)
-				m_callbackProcess(m_handleProcess, bufferArray, wideChars);
+			if (nullptr == single) {
+				if (m_callbackProcess)
+					m_callbackProcess(m_handleProcess, bufferArray, wideChars);
+			} else {
+				valueTotal.append(bufferArray, wideChars);
 
-			memset(buffer, 0, sizeof(buffer));
-			bytesRead = 0;
+				CResolveArrayTL<wchar_t> resolve(valueTotal.c_str(), valueTotal.length(), single);
+				resolve.invoke();
+
+				while (resolve.hasNext()) {
+					valueTotal = resolve.next();
+					if (false == resolve.hasNext()) break;
+
+					if (m_callbackProcess)
+						m_callbackProcess(m_handleProcess, valueTotal.c_str(), valueTotal.length());
+				}
+			}
+
+			memset(buffer, 0, sizeof(buffer)); bytesRead = 0;
 		}
 
-		if (termination) { 
+		if (termination) {
+			if (false == valueTotal.empty()) {
+				if (m_callbackProcess)
+					m_callbackProcess(m_handleProcess, valueTotal.c_str(), valueTotal.length());
+			}
+
 			unsigned long returnCode = 0;
 			GetExitCodeProcess(m_process, &returnCode);
-			ProcessClose(); 
-			if (0 != returnCode) {
+			ProcessClose();
+
+			if (0 != returnCode)
 				safe_sprintf(m_errormsg, L"process return failure (%d)", returnCode);
-				return -1;
-			}
-			return 0; 
+
+			return returnCode;
 		}
 	} while (GetTickCount() <= endedTime);
 
@@ -1433,7 +1444,7 @@ bool CShellQualcomm::ExecuteFirehose(const wchar_t * command, int timeout_ms)
 		return false;
 	}
 
-	if (0 > CommandRead(timeout_ms, "\n")) {
+	if (0 != CommandRead(timeout_ms, L"\r\n")) {
 		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
 		return false;
 	}

@@ -137,12 +137,10 @@ namespace pipeline {
 
 } using namespace pipeline;
 
-
 CPipeline::CPipeline()
 	: m_pathModule  (L"")
 	, m_pathCurrent (L"")
 	, m_process     (nullptr)
-	, m_removed     (nullptr)
 	, m_inputRead   (nullptr)
 	, m_inputWrite  (nullptr)
 	, m_outputRead  (nullptr)
@@ -321,34 +319,12 @@ bool CPipeline::CommandSend(const wchar_t *command, int cmdlen)
 
 int CPipeline::CommandRead(int timeout_ms, wchar_t *result, int reslen)
 {
-	if (nullptr == m_process) {
-		safe_sprintf(m_errormsg, L"process is null");
-		return -1;
-	}
-
-	if (nullptr == m_removed) {
-		switch (WaitForSingleObject(m_process, timeout_ms)) {
-		case WAIT_OBJECT_0:
-			ProcessClose();
-			break;
-		default: 
-			safe_sprintf(m_errormsg, L"read timeout or failed");
-			goto _cleanup;
-		}
-	} else {
-		HANDLE handleArray[2] = { m_removed, m_process };
-		switch (WaitForMultipleObjects(_countof(handleArray), handleArray, 
-					FALSE, timeout_ms)) {
-		case WAIT_OBJECT_0:
-			safe_sprintf(m_errormsg, L"device removed");
-			goto _cleanup;
-		case WAIT_OBJECT_0 + 1:
-			ProcessClose();
-			break;
-		default:
-			safe_sprintf(m_errormsg, L"timeout or failed");
-			goto _cleanup;
-		}
+	HANDLE handleArray[2] = { m_removed, m_process };
+	switch (WaitForMultipleObjects(_countof(handleArray), handleArray, FALSE, timeout_ms)) {
+		case WAIT_OBJECT_0: safe_sprintf(m_errormsg, L"device removed"); goto _cleanup;
+		case WAIT_OBJECT_0 + 1: ProcessClose(); break; // process endding
+		case WAIT_TIMEOUT: safe_sprintf(m_errormsg, L"waiting timeout"); goto _cleanup;
+		default: safe_sprintf(m_errormsg, L"waiting failure"); goto _cleanup;
 	}
 
     unsigned long charsRead = 0;
@@ -1448,6 +1424,35 @@ bool CShellQualcomm::ExecuteFirehose(const wchar_t * command, int timeout_ms)
 		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
 		return false;
 	}
+
+	return true;
+}
+
+bool CExecuteProcess::execute(const wchar_t * command, int timeout_ms)
+{
+	m_result.clear();
+
+	if (nullptr == command || 0 == wcslen(command)) {
+		safe_sprintf(m_errormsg, L"command is null");
+		return false;
+	}
+
+	if (false == CommandExec(command)) {
+		safe_overwrite(m_errormsg, L"send:%s", m_errormsg);
+		return false;
+	}
+
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	int resultLen = CommandRead(timeout_ms, resultLocal, _countof(resultLocal));
+    log_trace(resultLocal);
+
+	if (0 >= resultLen) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
+		return false;
+	}
+
+	m_result = resultLocal;
 
 	return true;
 }

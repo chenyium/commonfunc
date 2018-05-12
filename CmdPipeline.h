@@ -36,6 +36,28 @@
 #ifndef __CMD_PIPELINE_H__
 #define __CMD_PIPELINE_H__
 
+class CEventDef {
+public:
+	CEventDef() : m_event(nullptr) {
+		m_default = CreateEvent(NULL, TRUE, FALSE, NULL);
+	}
+	~CEventDef() {
+		CloseHandle(m_default), m_default = nullptr;
+	}
+
+private:
+	CEventDef(const CEventDef &);
+	CEventDef & operator =(const CEventDef &);
+
+public:
+	void operator=(const HANDLE & handle) { m_event = handle; }
+	operator HANDLE() { return nullptr == m_event ? m_default : m_event ; }
+
+private:
+	HANDLE m_default;
+	HANDLE m_event;
+};
+
 //! pipeline
 class CPipeline 
 {
@@ -44,8 +66,8 @@ public:
 	virtual ~CPipeline();
 
 private:
-	CPipeline(CPipeline&);
-	CPipeline& operator = (CPipeline&);
+	CPipeline(const CPipeline &);
+	CPipeline & operator =(const CPipeline &);
 
 public:
 	bool Initialize();
@@ -107,8 +129,8 @@ private:
 	std::wstring m_pathCurrent;
 
 private:
+	CEventDef m_removed;
 	HANDLE m_process;
-	HANDLE m_removed;
 	HANDLE m_inputRead;
 	HANDLE m_inputWrite;
 	HANDLE m_outputRead;
@@ -209,6 +231,18 @@ public:
 private:
 	static const wchar_t * PROCESS_SAHARA;
 	static const wchar_t * PROCESS_FHLOADER;
+};
+
+//! execute process
+
+class CExecuteProcess : public CPipeline
+{
+public:
+	bool execute(const wchar_t * command, int timeout_ms);
+	const std::wstring & result() { return m_result; }
+
+private:
+	std::wstring m_result;
 };
 
 #endif

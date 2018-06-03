@@ -168,6 +168,7 @@ public:
 		m_garbo.CGarbo::CGarbo();
 		return m_instance;
 	}
+	static const T * const_instance() { return Instance(); }
 };
 template <typename T> T * CSingleton<T>::m_instance = nullptr;
 template <typename T> typename CSingleton<T>::CGarbo CSingleton<T>::m_garbo;

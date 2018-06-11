@@ -148,13 +148,15 @@ protected:
 	virtual ~CSingleton() {}
 
 private:
-	CSingleton(CSingleton &);
+	CSingleton(const CSingleton &);
 	CSingleton & operator=(const CSingleton &);
 
 protected:
 	class CGarbo {
 	public:
-		~CGarbo() { if (CSingleton::m_instance) delete CSingleton::m_instance; }
+		~CGarbo() { 
+			if (CSingleton::m_instance) delete CSingleton::m_instance, CSingleton::m_instance = nullptr; 
+		}
 	};
 	static CGarbo m_garbo;
 
@@ -165,7 +167,7 @@ public:
 	static T * Instance() {
 		// create T instance. m_garbo must be here
 		if (nullptr == m_instance) { m_instance = new T; } 
-		m_garbo.CGarbo::CGarbo();
+		m_garbo;
 		return m_instance;
 	}
 	static const T * const_instance() { return Instance(); }

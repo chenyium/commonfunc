@@ -161,6 +161,7 @@ protected:
 class CShellAdb : public CShellContext, public CPipeline
 {
 protected:
+	virtual bool ExecuteShell(const wchar_t *command, int timeout_ms, wchar_t *result = nullptr, int reslen = 0);
 	virtual bool ExecuteShell(const wchar_t *command, int timeout_ms, const wchar_t *token,  
 			bool check = true, wchar_t *result = nullptr, int reslen = 0);
 	virtual bool AnalysisResult(wchar_t *result, const wchar_t *token, bool check = true);
@@ -168,8 +169,10 @@ protected:
 public:
 	bool ExecuteCommand(const wchar_t *command, int timeout_ms,
             wchar_t *result = nullptr, int reslen = 0);
+#if 0
 	bool ExecuteCommand(const wchar_t *command, int timeout_ms, const wchar_t *token, 
 			wchar_t *result = nullptr, int reslen = 0);
+#endif
 	bool ExecuteCommand(const wchar_t *command);
 
 public:
@@ -177,8 +180,6 @@ public:
 	bool ExecuteLS(int timeout_ms, const wchar_t *path);
 	bool ExecuteGetProp(int timeout_ms, const wchar_t *prop, wchar_t *result, int reslen);
 	bool ExecuteSetProp(int timeout_ms, const wchar_t *prop, const wchar_t *value);
-
-public:
 	bool ExecuteDevices(int timeout_ms, wchar_t *result, int reslen);
 	bool ExecuteForward(int timeout_ms, int client, int remote);
 	bool ExecuteStartServer(int timeout_ms);

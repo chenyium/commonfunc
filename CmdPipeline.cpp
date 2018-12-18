@@ -57,7 +57,7 @@ namespace pipeline {
 		static const int LEN_CMD       = 512;
 		static const int LEN_REASON    = 256;
 		static const int LEN_BUFF      = 256;
-		static const int LEN_BUFFER    = 1024*4;
+		static const int LEN_BUFFER    = 1024*20;
 	}
 
 	namespace cmd {
@@ -83,18 +83,8 @@ namespace pipeline {
 	}
 
 	namespace label {
-		static const wchar_t* ADB_TOKEN_START   = L"startserver_result";
-		static const wchar_t* ADB_TOKEN_SHELL   = L"shell_complete";
-		static const wchar_t* ADB_TOKEN_DEVICES = L"devices_result";
-		static const wchar_t* ADB_TOKEN_FORWARD = L"forward_result";
-		static const wchar_t* ADB_TOKEN_PULL    = L"pull_result";
-		static const wchar_t* ADB_TOKEN_PUSH    = L"push_result";
-		static const wchar_t* ADB_TOKEN_REBOOT  = L"reboot_result";
-		static const wchar_t* ADB_TOKEN_INSTALL = L"install_result";
-		static const wchar_t* ADB_TOKEN_DESC    = L"descriptor_result";
-		static const wchar_t* ADB_TOKEN_STATE   = L"state_result";
 		static const wchar_t* ADB_TOKEN_USB     = L"usb";
-		static const wchar_t* ADB_TOKEN_KBS     = L"KB/s";
+		static const wchar_t* ADB_TOKEN_KBS     = L"[100%]";
 		static const wchar_t* ADB_TOKEN_OKEY    = L"OKEY";
 		static const wchar_t* ADB_TOKEN_ROOT    = L"root@";
 	}
@@ -109,12 +99,10 @@ namespace pipeline {
 	}
 
 	namespace wlan {
-		static const wchar_t* ADB_CONNECT          = L"adb connect %s";
-		static const wchar_t* ADB_DISCONNECT       = L"adb disconnect %s";
-		static const wchar_t* ADB_TOKEN            = L"connected to %s:%d";
-		static const wchar_t* ADB_TOKEN_CONNECT    = L"connect_result";
-		static const wchar_t* ADB_TOKEN_DISCONNECT = L"disconnect_result";
-		static const wchar_t* ADB_STATUS           = L"connected to";
+		static const wchar_t* ADB_CONNECT       = L"adb connect %s";
+		static const wchar_t* ADB_DISCONNECT    = L"adb disconnect %s";
+		static const wchar_t* ADB_TOKEN         = L"connected to %s:%d";
+		static const wchar_t* ADB_STATUS        = L"connected to";
 		const int ADB_PORT = 5555;
 	}
 
@@ -319,10 +307,15 @@ bool CPipeline::CommandSend(const wchar_t *command, int cmdlen)
 
 int CPipeline::CommandRead(int timeout_ms, wchar_t *result, int reslen)
 {
+	unsigned long returnCode = 0;
+
 	HANDLE handleArray[2] = { m_removed, m_process };
 	switch (WaitForMultipleObjects(_countof(handleArray), handleArray, FALSE, timeout_ms)) {
 		case WAIT_OBJECT_0: safe_sprintf(m_errormsg, L"device removed"); goto _cleanup;
-		case WAIT_OBJECT_0 + 1: ProcessClose(); break; // process endding
+		case WAIT_OBJECT_0 + 1: 
+			GetExitCodeProcess(m_process, &returnCode);
+			ProcessClose();
+			break; // process endding
 		case WAIT_TIMEOUT: safe_sprintf(m_errormsg, L"waiting timeout"); goto _cleanup;
 		default: safe_sprintf(m_errormsg, L"waiting failure"); goto _cleanup;
 	}
@@ -359,6 +352,11 @@ int CPipeline::CommandRead(int timeout_ms, wchar_t *result, int reslen)
 
 		wmemcpy_s(result + charsRead, reslen - charsRead, bufferArray, wideChars);
 		charsRead += wideChars;
+	}
+
+	if (0 != returnCode) {
+		safe_sprintf(m_errormsg, L"process failure (%d)", returnCode);
+		return -1;
 	}
 
 	return charsRead;
@@ -659,6 +657,34 @@ void CPipeline::ProcessClean()
 	CloseHandle(m_process), m_process = nullptr;
 }
 
+bool CShellAdb::ExecuteShell(const wchar_t *command, int timeout_ms, wchar_t *result, int reslen)
+{	
+	if (nullptr == command || 0 == wcslen(command)) {
+		safe_sprintf(m_errormsg, L"command is null");
+		return false;
+	}
+
+	if (false == CommandExec(command)) {
+		safe_overwrite(m_errormsg, L"send:%s", m_errormsg);
+		return false;
+	}
+
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	int resultLen = CommandRead(timeout_ms, resultLocal, _countof(resultLocal));
+    log_trace(resultLocal);
+
+	if (0 > resultLen) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
+		return false;
+	}
+
+	if (nullptr != result && 0 != reslen)
+		safe_sprintf(result, reslen, L"%s", stringtrimw(resultLocal));
+
+	return true;
+}
+
 bool CShellAdb::ExecuteShell(const wchar_t *command, int timeout_ms, const wchar_t *token,  
 			bool check, wchar_t *result, int reslen)
 {
@@ -736,12 +762,18 @@ bool CShellAdb::ExecuteCommand(const wchar_t *command, int timeout_ms,
 {
 	wchar_t commandLocal[vol::LEN_CMD] = {0};
 
+#if 0
 	safe_sprintf(commandLocal, cmd::ADB_SHELL_M, m_serial.c_str(), command);
 	log_trace(commandLocal);
+#else
+	safe_sprintf(commandLocal, cmd::ADB_COMMAND, m_serial.c_str(), command);
+	log_trace(commandLocal);
+#endif
 
-	return ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, false, result, reslen);
+	return ExecuteShell(commandLocal, timeout_ms, result, reslen);
 }
 
+#if 0
 bool CShellAdb::ExecuteCommand(const wchar_t *command, int timeout_ms, const wchar_t *token, 
         wchar_t *result, int reslen)
 {
@@ -752,6 +784,7 @@ bool CShellAdb::ExecuteCommand(const wchar_t *command, int timeout_ms, const wch
 
 	return ExecuteShell(commandLocal, timeout_ms, token, true, result, reslen);
 }
+#endif
 
 bool CShellAdb::ExecuteCommand(const wchar_t *command)
 {
@@ -782,8 +815,7 @@ bool CShellAdb::ExecuteLS(int timeout_ms, const wchar_t *path)
 
     wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
-                false, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
         return false;
     }
 
@@ -810,8 +842,7 @@ bool CShellAdb::ExecuteGetProp(int timeout_ms, const wchar_t *prop,
 
     wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
-                false, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
         return false;
     }
 
@@ -834,8 +865,7 @@ bool CShellAdb::ExecuteSetProp(int timeout_ms, const wchar_t *prop, const wchar_
 
     wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
-                false, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
         return false;
     }
 
@@ -856,8 +886,7 @@ bool CShellAdb::ExecuteDevices(int timeout_ms, wchar_t *result, int reslen)
 
     wchar_t resultLocal[vol::LEN_BUFFER] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_DEVICES, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
@@ -866,13 +895,18 @@ bool CShellAdb::ExecuteDevices(int timeout_ms, wchar_t *result, int reslen)
 		return false;
 	}
 
-	if (false == stringcontainw(resultLocal, label::DEVICES_LIST)) {
+	CResolveArrayTL<wchar_t> resolve(resultLocal, wcslen(resultLocal), L"\r\n");
+	resolve.invoke();
+
+	if (false == stringissamew(resolve.next(), label::DEVICES_LIST)) {
 		safe_sprintf(m_errormsg, L"list is missing");
 		return false;
 	}
 
-	safe_overwrite(resultLocal, L"%s", resultLocal + wcslen(label::DEVICES_LIST));
-	safe_sprintf(result, reslen, _T("%s"), resultLocal);
+	memset(result, 0, reslen * sizeof(wchar_t));
+	while (resolve.hasNext()) {
+		safe_overwrite(result, reslen, L"%s\n%s", result, resolve.next());
+	}
 
 	if (stringiszerow(stringtrimw(result))) {
 		safe_sprintf(m_errormsg, L"device is empty");
@@ -889,12 +923,12 @@ bool CShellAdb::ExecuteForward(int timeout_ms, int client, int remote)
 	safe_sprintf(commandLocal, cmd::ADB_FORWARD, m_serial.c_str(), client, remote);
 	log_trace(commandLocal);
 
-	return ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_FORWARD);
+	return ExecuteShell(commandLocal, timeout_ms);
 }
 
 bool CShellAdb::ExecuteStartServer(int timeout_ms)
 {
-	return ExecuteShell(cmd::ADB_STARTSERVER, timeout_ms, label::ADB_TOKEN_START);
+	return ExecuteShell(cmd::ADB_STARTSERVER, timeout_ms);
 }
 
 bool CShellAdb::ExecutePull(int timeout_ms, const wchar_t *path, const wchar_t *target)
@@ -907,8 +941,7 @@ bool CShellAdb::ExecutePull(int timeout_ms, const wchar_t *path, const wchar_t *
     // large buffer
     wchar_t resultLocal[vol::LEN_BUFFER] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_PULL, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
@@ -934,8 +967,7 @@ bool CShellAdb::ExecutePush(int timeout_ms, const wchar_t *path, const wchar_t *
 
     wchar_t resultLocal[vol::LEN_BUFFER] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_PUSH, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
@@ -961,8 +993,7 @@ bool CShellAdb::ExecuteDescription(int timeout_ms, wchar_t *result, int reslen)
 
     wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_DESC, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
@@ -1007,8 +1038,7 @@ bool CShellAdb::ExecuteState(int timeout_ms, wchar_t *result, int reslen)
 
     wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_STATE, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
@@ -1031,8 +1061,7 @@ bool CShellAdb::ExecuteInstall(int timeout_ms, const wchar_t *path)
 
     wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_INSTALL, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
@@ -1058,8 +1087,7 @@ bool CShellAdb::ExecuteUSB(int timeout_ms)
 
     wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
-	if (!ExecuteShell(command, timeout_ms, label::ADB_TOKEN_REBOOT, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(command, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
@@ -1085,8 +1113,7 @@ bool CShellAdb::ExecuteFlashcmdBase(const wchar_t *command, int timeout_ms,
 
 	wchar_t resultLocal[vol::LEN_BUFFER] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, label::ADB_TOKEN_SHELL, 
-				false, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
     }
 
@@ -1202,8 +1229,7 @@ bool CShellAdb::ExecuteWlanConnect(int timeout_ms, wchar_t *result, int reslen)
 
     wchar_t resultLocal[vol::LEN_BUFFER] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, wlan::ADB_TOKEN_CONNECT, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 
@@ -1236,8 +1262,7 @@ bool CShellAdb::ExecuteWlanDisconnect(int timeout_ms)
 
     wchar_t resultLocal[vol::LEN_BUFFER] = {0};
 
-	if (!ExecuteShell(commandLocal, timeout_ms, wlan::ADB_TOKEN_DISCONNECT, 
-				true, resultLocal, _countof(resultLocal))) {
+	if (!ExecuteShell(commandLocal, timeout_ms, resultLocal, _countof(resultLocal))) {
 		return false;
 	}
 

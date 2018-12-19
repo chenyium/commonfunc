@@ -80,6 +80,7 @@ public:
 
 public:
 	bool ExecuteCatch(wchar_t *result, int reslen);
+	bool ExecuteRead(int timeout_ms, wchar_t *result = nullptr, int reslen = 0);
 	bool ExecuteRead(const wchar_t *token, int timeout_ms, 
 			wchar_t *result = nullptr, int reslen = 0);
 	bool ExecuteSend(const wchar_t *command, int cmdlen);

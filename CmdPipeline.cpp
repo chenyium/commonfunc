@@ -567,6 +567,24 @@ bool CPipeline::ExecuteCatch(wchar_t *result, int reslen)
 	return true;
 }
 
+bool CPipeline::ExecuteRead(int timeout_ms, wchar_t *result, int reslen)
+{
+    wchar_t resultLocal[vol::LEN_BUFFER] = {0};
+
+	int resultLen = CommandRead(timeout_ms, resultLocal, _countof(resultLocal));
+    log_trace(resultLocal);
+
+	if (0 > resultLen) {
+		safe_overwrite(m_errormsg, L"read:%s", m_errormsg);
+		return false;
+	}
+
+	if (nullptr != result && 0 != reslen)
+		safe_sprintf(result, reslen, L"%s", stringtrimw(resultLocal));
+
+	return true;
+}
+
 bool CPipeline::ExecuteRead(const wchar_t *token, int timeout_ms, wchar_t *result, int reslen)
 {
 	wchar_t resultLocal[vol::LEN_BUFFER] = {0};
@@ -1168,17 +1186,21 @@ bool CShellAdb::ExecuteFlashcmdPrep(int timeout_ms, int slot, wchar_t *result, i
 bool CShellAdb::ExecuteFlashcmdBurn(int slot, const wchar_t * token)
 {
 	wchar_t commandLocal[vol::LEN_CMD] = {0};
+	wchar_t commandBurns[vol::LEN_CMD] = {0};
+
+	safe_sprintf(commandBurns, cmd::FLASHCMD_BURN, slot);
 
 	if (m_serial.empty())
-		safe_sprintf(commandLocal, cmd::ADB_SHELL_S, L"");
+		safe_sprintf(commandLocal, cmd::ADB_SHELL_S, commandBurns);
 	else
-		safe_sprintf(commandLocal, cmd::ADB_SHELL_M, m_serial.c_str(), L"");
+		safe_sprintf(commandLocal, cmd::ADB_SHELL_M, m_serial.c_str(), commandBurns);
 
 	log_trace(commandLocal);
 
 	if (false == CommandExec(commandLocal))
 		return false;
 
+#if 0
 	wchar_t resultLocal[vol::LEN_BUFF] = {0};
 
 	int resultLen = CommandRead(nullptr == token ? label::ADB_TOKEN_ROOT : token, 5000, 
@@ -1206,6 +1228,7 @@ bool CShellAdb::ExecuteFlashcmdBurn(int slot, const wchar_t * token)
 		safe_overwrite(m_errormsg, L"wait:%s", m_errormsg);
 		return false;
 	}
+#endif
 
 	return true;
 }

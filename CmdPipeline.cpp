@@ -84,9 +84,8 @@ namespace pipeline {
 
 	namespace label {
 		static const wchar_t* ADB_TOKEN_USB     = L"usb";
-		static const wchar_t* ADB_TOKEN_KBS     = L"[100%]";
+		static const wchar_t* ADB_TOKEN_KBS     = L"KB/s";
 		static const wchar_t* ADB_TOKEN_OKEY    = L"OKEY";
-		static const wchar_t* ADB_TOKEN_ROOT    = L"root@";
 	}
 
 	namespace label {
@@ -94,7 +93,6 @@ namespace pipeline {
 		static const wchar_t* ADB_SUCCESS       = L"success";
 		static const wchar_t* ADB_FAILURE       = L"failure";
 		static const wchar_t* DEVICES_LIST      = L"List of devices attached";
-		static const wchar_t* DEVICE_NOT_FOUND  = L"error: device not found";
 		static const wchar_t* REBOOT_USB_MODE   = L"restarting in USB mode";
 	}
 
